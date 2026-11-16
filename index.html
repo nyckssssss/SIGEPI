@@ -738,17 +738,23 @@ async function postarFluxo(dados){
   const url = cfg('fluxo_email_url');
   if(!url) throw new Error('A URL do fluxo de e-mail não foi configurada (Configurações).');
   if(DEMO) throw new Error('No modo demonstração o e-mail não é enviado.');
-  // text/plain + no-cors: o navegador envia sem bloqueio de CORS (o fluxo lê com json(string(triggerBody())))
-  await fetch(url, { method:'POST', mode:'no-cors', headers:{ 'Content-Type':'text/plain;charset=UTF-8' }, body: JSON.stringify(dados) });
+  let r;
+  try { r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(dados) }); }
+  catch(e){ throw new Error('Não consegui falar com o fluxo (rede bloqueada ou URL errada).'); }
+  if(r.ok) return;
+  const t = await r.text().catch(() => '');
+  if(r.status === 401 || /DirectApiAuthorizationRequired/.test(t))
+    throw new Error('O fluxo exige login (401). No gatilho, deixe "Quem pode disparar o fluxo" = Qualquer pessoa, SALVE o fluxo e copie a URL de novo (ela precisa ter "sig=" no final).');
+  if(r.status === 404) throw new Error('Fluxo não encontrado (404). Ele foi apagado ou a URL está errada.');
+  throw new Error(`O fluxo respondeu com erro ${r.status}. ${t.slice(0, 200)}`);
 }
 const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 async function enviarEmailPedido(pid){
   const p = S.data.pedidos.find(x => x.id === Number(pid)), its = itensDo(pid), dest = destinatarios(p);
   if(!dest.length) throw new Error('Nenhum destinatário: cadastre alguém de Compras em Usuários ou preencha os destinatários em Configurações.');
-  const linhas = its.map(i => { const e = epiPorId(i.EpiId), c = e ? calc(e) : null;
-    return { 'Item': i.Title, 'Código': i.Codigo, 'C.A.': e?.CA || '', 'Qtd solicitada': num(i.QtdPedida), 'Estoque atual': e ? num(e.EstoqueAtual) : '',
-      'Estoque mínimo': e ? num(e.EstoqueMinimo) : '', 'Saída média/dia': c && c.sd ? Number(c.sd.toFixed(2)) : '',
-      'Dias até o mínimo': c && c.diasAteMin != null ? Math.floor(c.diasAteMin) : '', 'Prazo de entrega (dias)': c ? c.prazo : '' }; });
+  const criadoEm = hist(p)[0]?.data, dataHora = criadoEm ? new Date(criadoEm).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }).replace(',', '') : fmtData(p.DataSolicitacao);
+  const linhas = its.map(i => { const e = epiPorId(i.EpiId);
+    return { 'Pedido': p.Title, 'Descrição': i.Title, 'Código': i.Codigo, 'C.A.': e?.CA || '', 'Quantidade Pedida': num(i.QtdPedida), 'Data': dataHora }; });
   const anexo = await xlsxBase64(linhas, 'Pedido');
   const link = location.origin + location.pathname + '#/pedido/' + p.id;
   const td = 'style="border:1px solid #d0d5dd;padding:6px 10px"';
@@ -756,8 +762,8 @@ async function enviarEmailPedido(pid){
   <p>${saudacao()} a todos.</p><p>Segue a solicitação de compra de EPI realizada pela Área de SHE.</p>
   <p><b>Número do Pedido:</b> ${esc(p.Title)}<br><b>Data da Solicitação:</b> ${fmtData(p.DataSolicitacao)}<br><b>Solicitante:</b> ${esc(p.Solicitante)}${p.Fornecedor ? `<br><b>Fornecedor sugerido:</b> ${esc(p.Fornecedor)}` : ''}</p>
   ${p.Observacao ? `<p><b>Observação:</b> ${esc(p.Observacao)}</p>` : ''}
-  <table style="border-collapse:collapse"><tr style="background:#f1f3f7"><th ${td}>Item</th><th ${td}>Código</th><th ${td}>Quantidade</th></tr>
-  ${its.map(i => `<tr><td ${td}>${esc(i.Title)}</td><td ${td}>${esc(i.Codigo)}</td><td ${td} align="right">${num(i.QtdPedida)}</td></tr>`).join('')}</table>
+  <table style="border-collapse:collapse"><tr style="background:#4472c4;color:#fff"><th ${td}>Descrição</th><th ${td}>Código</th><th ${td}>C.A.</th><th ${td}>Quantidade</th></tr>
+  ${its.map(i => `<tr><td ${td}>${esc(i.Title)}</td><td ${td}>${esc(i.Codigo)}</td><td ${td}>${esc(epiPorId(i.EpiId)?.CA || '—')}</td><td ${td} align="right">${num(i.QtdPedida)}</td></tr>`).join('')}</table>
   <p>Acompanhe e aprove pelo SIGEPI: <a href="${link}">${link}</a></p>
   <p>Relatório gerado em: ${fmtData(hoje())}</p><p>Atenciosamente,<br>${esc(p.Solicitante)}</p></div>`;
   await postarFluxo({ para: dest.join(';'), assunto: `Solicitação de Compra de EPI - ${p.Title}`, corpo,
@@ -1185,6 +1191,7 @@ const A = {
   async salvarEmailCfg(el){
     const url = $('#cfgUrl').value.trim(), dest = $('#cfgDest').value.trim();
     if(url && !/^https:\/\//.test(url)) return toast('A URL precisa começar com https://', 'warn');
+    if(url && !/[?&]sig=/.test(url)) return toast('Essa URL não tem a parte "sig=". No fluxo, deixe "Quem pode disparar" = Qualquer pessoa, salve o fluxo e copie a URL de novo.', 'warn', 10000);
     if(await salvar(el, async () => { await setCfg('fluxo_email_url', url); await setCfg('email_destinatarios', dest); await recarregar('config'); }, 'Configuração salva!')) render();
   },
   async testarEmail(el){
