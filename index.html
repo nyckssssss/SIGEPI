@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIGEPI · Controle de EPIs</title>
+<style>
+:root{
+  --bg:#f3f5f9; --card:#fff; --ink:#1b2333; --muted:#667085; --line:#e3e7ee;
+  --side:#18202f; --side2:#222c3f; --pri:#2457c5; --pri2:#1c48a6; --amber:#f2a900;
+  --ok:#1f9d55; --warn:#d98a00; --bad:#d64545; --purple:#7a4fd1;
+  --r:12px; --sh:0 1px 2px rgba(16,24,40,.06),0 2px 8px rgba(16,24,40,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--pri)}
+a.btn{text-decoration:none}
+td:first-child{white-space:nowrap}
+.layout{display:flex;min-height:100vh}
+.side{width:232px;background:var(--side);color:#cfd6e4;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid #2b3549}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:var(--amber);display:grid;place-items:center;color:#18202f;font-weight:800}
+.brand b{color:#fff;font-size:16px;letter-spacing:.3px}
+.brand small{display:block;color:#8d98ad;font-size:11px}
+.nav{padding:12px 10px;flex:1;overflow:auto}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#cfd6e4;text-decoration:none;margin-bottom:2px}
+.nav a:hover{background:var(--side2)}
+.nav a.on{background:var(--pri);color:#fff}
+.nav .ico{width:18px;text-align:center;opacity:.9}
+.nav .cnt{margin-left:auto;background:var(--amber);color:#18202f;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700}
+.me{padding:14px 18px;border-top:1px solid #2b3549;font-size:12px}
+.me b{color:#fff;display:block;font-size:13px}
+.me button{margin-top:8px;background:none;border:1px solid #3a465e;color:#cfd6e4;border-radius:6px;padding:4px 10px;cursor:pointer}
+.main{flex:1;min-width:0;padding:26px 30px 60px}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.top h1{font-size:22px;margin:0;font-weight:700}
+.top .sp{flex:1}
+.demo-tag{background:#fff4d6;color:#8a5a00;border:1px solid #f5d98b;border-radius:20px;padding:3px 10px;font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:18px}
+.card h2{font-size:15px;margin:0 0 14px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi{padding:16px 18px;cursor:pointer;transition:transform .1s}
+.kpi:hover{transform:translateY(-1px)}
+.kpi .n{font-size:28px;font-weight:700;margin-top:4px}
+.kpi .l{color:var(--muted);font-size:12.5px}
+.kpi.k-amber{border-top:3px solid var(--amber)} .kpi.k-blue{border-top:3px solid var(--pri)}
+.kpi.k-purple{border-top:3px solid var(--purple)} .kpi.k-red{border-top:3px solid var(--bad)} .kpi.k-green{border-top:3px solid var(--ok)}
+.two{grid-template-columns:1.4fr 1fr}
+@media(max-width:1000px){.two{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover td{background:#f7f9fc}
+td.num,th.num{text-align:right}
+.pill{display:inline-block;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.s-ag{background:#fff3d6;color:#8a5a00}.s-ap{background:#e3ecff;color:#1c48a6}.s-pr{background:#efe7ff;color:#5a34a8}
+.s-re{background:#dcf5e6;color:#14713d}.s-rc{background:#fde4e4;color:#a32b2b}.s-ca{background:#eceff3;color:#555}
+.s-low{background:#fde4e4;color:#a32b2b}.s-okk{background:#dcf5e6;color:#14713d}.s-mid{background:#fff3d6;color:#8a5a00}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+.btn:hover{background:#f6f8fb}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}.btn.pri:hover{background:var(--pri2)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.bad{color:var(--bad);border-color:#f2c4c4}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.btn:disabled{opacity:.55;cursor:wait}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:150px;flex:1}
+.fld label{font-size:12px;color:var(--muted);font-weight:600}
+input,select,textarea{border:1px solid #d3d9e3;border-radius:8px;padding:8px 10px;background:#fff;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid #bcd0ff;border-color:var(--pri)}
+input.qty{width:90px;text-align:right}
+textarea{min-height:70px;resize:vertical}
+.muted{color:var(--muted)} .small{font-size:12px}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12.5px}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 20px}
+.dl div span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.dl div b{font-weight:600}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{position:relative;padding:0 0 14px 22px;border-left:2px solid var(--line);margin-left:6px}
+.timeline li:last-child{border-color:transparent}
+.timeline li:before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--pri);border:2px solid #fff}
+.progress{height:6px;background:#edf0f5;border-radius:4px;overflow:hidden;min-width:70px}
+.progress i{display:block;height:100%;background:var(--ok)}
+.steps{display:flex;gap:0;margin:4px 0 6px}
+.steps div{flex:1;text-align:center;font-size:11.5px;color:var(--muted);position:relative;padding-top:18px}
+.steps div:before{content:"";position:absolute;top:5px;left:0;right:0;height:3px;background:#e3e7ee}
+.steps div:after{content:"";position:absolute;top:0;left:calc(50% - 7px);width:14px;height:14px;border-radius:50%;background:#e3e7ee}
+.steps div.done:before,.steps div.done:after{background:var(--ok)}
+.steps div.done{color:var(--ink);font-weight:600}
+.toast-box{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.toast{background:#1b2333;color:#fff;padding:11px 16px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:380px;animation:in .2s}
+.toast.ok{background:#14713d}.toast.err{background:#a32b2b}.toast.warn{background:#8a5a00}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.modal-bg{position:fixed;inset:0;background:rgba(15,20,30,.45);display:grid;place-items:center;z-index:50;padding:16px}
+.modal{background:#fff;border-radius:14px;width:min(560px,100%);max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h3{margin:0 0 16px}
+.login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#18202f,#2457c5)}
+.login .box{background:#fff;border-radius:16px;padding:32px;width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login .logo{width:48px;height:48px;border-radius:12px;background:var(--amber);display:grid;place-items:center;font-weight:800;font-size:20px;margin-bottom:14px}
+.login h1{margin:0 0 4px;font-size:22px}
+.profile{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;cursor:pointer;margin-top:10px}
+.profile:hover{border-color:var(--pri);background:#f6f9ff}
+.av{width:36px;height:36px;border-radius:50%;background:#e3ecff;color:var(--pri);display:grid;place-items:center;font-weight:700}
+.loading{display:grid;place-items:center;min-height:60vh;color:var(--muted)}
+.menu-btn{display:none}
+@media(max-width:820px){
+  .side{position:fixed;left:-240px;z-index:40;transition:left .2s}
+  .side.open{left:0}
+  .menu-btn{display:inline-flex}
+  .main{padding:18px 14px 60px}
+  .hide-m{display:none}
+}
+.scroll{overflow-x:auto}
+.alert{background:#fff7e6;border:1px solid #f5d98b;color:#7a5200;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.alert.err{background:#fdecec;border-color:#f2c4c4;color:#8f2424}
+code{background:#f1f3f7;border-radius:4px;padding:1px 5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Carregando…</div></div>
+<div class="toast-box" id="toasts"></div>
+
+<script>
+/* =====================================================================
+   SIGEPI — Controle de EPIs (pedido → aprovação → recebimento)
+   ---------------------------------------------------------------------
+   CONFIGURAÇÃO: com supabaseUrl vazio o app roda em MODO DEMONSTRAÇÃO
+   (dados de exemplo salvos só neste navegador). Para usar com a equipe,
+   cole aqui a "Project URL" e a chave pública (publishable/anon) do Supabase
+   (Project Settings → API). A chave anon PODE ficar no código: quem
+   protege os dados são as regras criadas pelo arquivo supabase.sql.
+   ===================================================================== */
+const CONFIG = {
+  supabaseUrl: 'https://pthtodauvlzfvduwrwdo.supabase.co',
+  supabaseAnonKey: 'sb_publishable_4OSLipvGSDR3jR96dKQA9A_lYCj6cmG',   // chave pública (publishable)
+  diasHistorico: 180,    // janela (em dias) usada para calcular a saída média por dia
+};
+
+const ST = { AG:'Aguardando aprovação', AP:'Aprovado', PR:'Parcialmente recebido', RE:'Recebido', RC:'Recusado', CA:'Cancelado' };
+const ST_CLASS = { [ST.AG]:'s-ag', [ST.AP]:'s-ap', [ST.PR]:'s-pr', [ST.RE]:'s-re', [ST.RC]:'s-rc', [ST.CA]:'s-ca' };
+const ABERTOS = [ST.AG, ST.AP, ST.PR];
+const DEMO = !CONFIG.supabaseUrl;
+
+/* ============================ utilidades ============================ */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
+const hoje = () => new Date().toISOString().slice(0,10);
+const agora = () => new Date().toISOString();
+const fmtData = s => { if(!s) return '—'; const d = String(s).slice(0,10).split('-'); return d.length===3 ? `${d[2]}/${d[1]}/${d[0]}` : esc(s); };
+const fmtDataHora = s => { if(!s) return '—'; const d = new Date(s); return isNaN(d) ? esc(s) : d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}); };
+const fmtMes = s => { if(!s) return '—'; const [a,m] = String(s).split('-'); return m ? `${m}/${a}` : esc(s); };
+const pad = (n, w=4) => String(n).padStart(w, '0');
+const iniciais = n => String(n||'?').split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+const pill = s => `<span class="pill ${ST_CLASS[s]||'s-ca'}">${esc(s)}</span>`;
+const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+
+function toast(msg, tipo='ok', ms=4200){
+  const el = document.createElement('div');
+  el.className = 'toast ' + tipo; el.textContent = msg;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), ms);
+}
+function modal(html){ closeModal(); const bg = document.createElement('div'); bg.className='modal-bg'; bg.id='modal';
+  bg.innerHTML = `<div class="modal">${html}</div>`; bg.addEventListener('mousedown', e => { if(e.target===bg) closeModal(); });
+  document.body.appendChild(bg); const f = bg.querySelector('input,select,textarea'); if(f) f.focus(); }
+function closeModal(){ const m = $('#modal'); if(m) m.remove(); }
+/** Confirmação dentro da página (alert/confirm do navegador são bloqueados em alguns lugares) */
+function confirmar(msg, ok='Confirmar', perigo=false){
+  return new Promise(res => {
+    modal(`<h3>Confirmar</h3><p>${esc(msg)}</p><div class="row" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn" id="cfNao">Voltar</button><button class="btn ${perigo ? 'bad' : 'pri'}" id="cfSim">${esc(ok)}</button></div>`);
+    $('#cfNao').onclick = () => { closeModal(); res(false); };
+    $('#cfSim').onclick = () => { closeModal(); res(true); };
+  });
+}
+
+/** Executa uma gravação com botão travado; só mostra sucesso se TUDO deu certo. */
+async function salvar(btn, fn, msgOk){
+  if(btn){ btn.disabled = true; btn.dataset.txt = btn.textContent; btn.textContent = 'Salvando…'; }
+  try { await fn(); if(msgOk) toast(msgOk, 'ok'); return true; }
+  catch(e){ console.error(e); toast('Não foi possível salvar: ' + (e.message || e), 'err', 8000); return false; }
+  finally { if(btn && document.body.contains(btn)){ btn.disabled = false; btn.textContent = btn.dataset.txt; } }
+}
+
+/* ======================= camada de dados: DEMO ====================== */
+const DemoStore = {
+  key: 'sigepi-demo-v2',
+  db: null,
+  load(){
+    try { this.db = JSON.parse(localStorage.getItem(this.key)); } catch(e){ this.db = null; }
+    if(!this.db) this.db = seed();
+    if(!this.db.__ok){ this.db = seed(); }
+  },
+  persist(){ try { localStorage.setItem(this.key, JSON.stringify(this.db)); } catch(e){} },
+  async init(){ this.load(); },
+  async all(lista){ return structuredClone(this.db[lista] || []); },
+  async add(lista, campos){ const id = (this.db.seq[lista] = (this.db.seq[lista]||0) + 1);
+    const item = { id, ...campos }; (this.db[lista] ||= []).push(item); this.persist(); return structuredClone(item); },
+  async update(lista, id, campos){ const it = this.db[lista].find(x => x.id === id); if(!it) throw new Error('Item não encontrado');
+    Object.assign(it, campos); this.persist(); return structuredClone(it); },
+  async remove(lista, id){ this.db[lista] = this.db[lista].filter(x => x.id !== id); this.persist(); },
+  reset(){ this.db = seed(); this.persist(); },
+};
+
+/* ==================== camada de dados: SUPABASE ===================== */
+let sb = null, sessao = null;
+function carregarScript(src){ return new Promise((ok, erro) => { const s = document.createElement('script'); s.src = src; s.onload = ok;
+  s.onerror = () => erro(new Error('Não consegui carregar ' + src + ' (internet bloqueada?)')); document.head.appendChild(s); }); }
+function erroAmigavel(e){
+  const m = e?.message || String(e);
+  if(/row-level security|permission denied|0 rows|no\) rows/i.test(m)) return 'Sem permissão. Seu e-mail precisa estar cadastrado em Usuários.';
+  if(/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com o servidor. Verifique a internet.';
+  if(/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
+  if(/Email not confirmed/i.test(m)) return 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada e o spam).';
+  if(/already registered/i.test(m)) return 'Esse e-mail já tem conta. Use "Entrar".';
+  if(/Password should be/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
+  if(/duplicate key/i.test(m)) return 'Já existe um registro igual (código ou e-mail repetido).';
+  return m;
+}
+const chk = ({ data, error }) => { if(error) throw new Error(erroAmigavel(error)); return data; };
+const SupaStore = {
+  async init(){
+    await carregarScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js');
+    sb = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+    sessao = chk(await sb.auth.getSession()).session;
+  },
+  async all(t){ const out = [];
+    for(let de = 0; ; de += 1000){ const d = chk(await sb.from(t).select('*').order('id').range(de, de + 999)); out.push(...d); if(d.length < 1000) break; }
+    return out; },
+  async add(t, c){ return chk(await sb.from(t).insert(c).select().single()); },
+  async update(t, id, c){ return chk(await sb.from(t).update(c).eq('id', id).select().single()); },
+  async remove(t, id){ chk(await sb.from(t).delete().eq('id', id)); },
+};
+const Store = DEMO ? DemoStore : SupaStore;
+
+/* ============================== estado ============================== */
+const S = { user:null, data:{ epis:[], usuarios:[], pedidos:[], itens:[], consumo:[], perguntas:[] }, rascunho:[], filtros:{ pedidos:'Abertos', perg:'Pendentes', busca:'' }, erroSetup:null };
+
+async function recarregar(...listas){
+  if(!listas.length) listas = Object.keys(S.data);
+  const res = await Promise.all(listas.map(l => Store.all(l)));
+  listas.forEach((l,i) => S.data[l] = res[i]);
+}
+const area = () => S.user?.area;
+const pode = {
+  criarPedido: () => ['SHE','Admin'].includes(area()),
+  aprovar:     () => ['Compras','Admin'].includes(area()),
+  receber:     () => ['SHE','Admin'].includes(area()),
+  estoque:     () => ['SHE','Admin'].includes(area()),
+  responder:   () => ['Compras','Admin'].includes(area()),
+  admin:       () => area() === 'Admin',
+};
+
+/* ========================= regras de negócio ======================== */
+const epiPorId = id => S.data.epis.find(e => e.id === Number(id));
+const itensDo = pid => S.data.itens.filter(i => Number(i.PedidoId) === Number(pid));
+const hist = p => { try { return JSON.parse(p.Historico || '[]'); } catch(e){ return []; } };
+const comHist = (p, acao) => JSON.stringify([...hist(p), { data: agora(), usuario: S.user.nome, acao }]);
+
+function mesesAtras(n){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0,7); }
+const DIA = 864e5;
+const dataDe = s => { const d = new Date(String(s || '').slice(0,10) + 'T12:00:00'); return isNaN(d) ? null : d; };
+const diasEntre = (a, b) => { const x = dataDe(a), y = dataDe(b); return x && y ? Math.round((y - x) / DIA) : null; };
+const somaDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); };
+const diasPeriodo = c => { const d = diasEntre(c.DataInicio, c.DataFim); return d == null || d < 0 ? 0 : d + 1; };
+
+/** Saída média por dia = soma do que saiu ÷ soma dos dias dos períodos lançados (janela recente) */
+function saidaDia(codigo){
+  let regs = S.data.consumo.filter(c => norm(c.Codigo) === norm(codigo));
+  const recentes = regs.filter(c => (c.DataFim || '') >= somaDias(-CONFIG.diasHistorico));
+  if(recentes.length) regs = recentes;
+  let q = 0, d = 0;
+  for(const c of regs){ const n = diasPeriodo(c); if(n){ q += num(c.QtdSaida); d += n; } }
+  return d ? q / d : 0;
+}
+/** Prazo real = média de dias entre o pedido ao fornecedor e a 1ª entrega do item */
+function prazoReal(epiId){
+  const ds = [];
+  for(const i of S.data.itens.filter(i => Number(i.EpiId) === epiId && i.DataPrimeiroRecebimento)){
+    const p = S.data.pedidos.find(p => p.id === Number(i.PedidoId));
+    const d = p ? diasEntre(p.DataPedidoFornecedor || p.DataSolicitacao, i.DataPrimeiroRecebimento) : null;
+    if(d != null && d >= 0) ds.push(d);
+  }
+  return ds.length ? { dias: Math.round(ds.reduce((a,b) => a + b, 0) / ds.length), n: ds.length } : null;
+}
+/** Quantidade já pedida/aprovada que ainda não chegou */
+function emAberto(epiId){
+  let t = 0;
+  for(const p of S.data.pedidos.filter(p => ABERTOS.includes(p.Status)))
+    for(const i of itensDo(p.id).filter(i => Number(i.EpiId) === epiId))
+      t += Math.max(0, (p.Status === ST.AG ? num(i.QtdPedida) : num(i.QtdAprovada)) - num(i.QtdRecebida));
+  return t;
+}
+/** Todos os indicadores de um EPI */
+function calc(e){
+  const sd = saidaDia(e.Codigo), real = prazoReal(e.id), prazo = real ? real.dias : num(e.PrazoEntregaDias);
+  const atual = num(e.EstoqueAtual), min = num(e.EstoqueMinimo), aberto = emAberto(e.id);
+  const diasAteMin = sd > 0 ? Math.max(0, (atual - min) / sd) : null;   // quantos dias até bater no mínimo
+  const diasAteZero = sd > 0 ? atual / sd : null;                        // quantos dias até acabar
+  const sug = Math.max(0, Math.ceil(sd * prazo + min - atual - aberto)); // o que pedir para não furar o mínimo
+  return { sd, real, prazo, atual, min, aberto, diasAteMin, diasAteZero, sug };
+}
+const sugestao = e => calc(e).sug;
+const fmtDias = d => d == null ? '—' : d >= 999 ? '999+' : Math.floor(d) + ' d';
+const fmtTaxa = v => v ? (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace('.', ',')) : '—';
+function situacaoEstoque(e){
+  const c = calc(e);
+  if(c.atual <= c.min) return ['Abaixo do mínimo','s-low'];
+  if(c.sug > 0) return ['Pedir já','s-mid'];
+  return ['OK','s-okk'];
+}
+function atrasado(p){ return [ST.AP, ST.PR].includes(p.Status) && p.PrevisaoEntrega && p.PrevisaoEntrega < hoje(); }
+
+/* =============================== telas ============================== */
+const NAV = [
+  ['inicio','Início','◧'], ['pedidos','Pedidos','☰'], ['novo','Novo pedido','＋', () => pode.criarPedido()],
+  ['estoque','Estoque','▦'], ['consumo','Saídas','↘'], ['perguntas','Perguntas','?'],
+  ['usuarios','Usuários','☺', () => pode.admin()], ['config','Configurações','⚙', () => pode.admin()],
+];
+function contadores(){
+  return {
+    pedidos: pode.aprovar() ? S.data.pedidos.filter(p => p.Status === ST.AG).length
+           : S.data.pedidos.filter(p => [ST.AP, ST.PR].includes(p.Status)).length,
+    perguntas: pode.responder() ? S.data.perguntas.filter(q => q.Status === 'Pendente').length : 0,
+  };
+}
+function shell(rota, titulo, corpo, acoes=''){
+  const c = contadores();
+  return `<div class="layout">
+  <aside class="side" id="side">
+    <div class="brand"><div class="logo">EPI</div><div><b>SIGEPI</b><small>Controle de EPIs</small></div></div>
+    <nav class="nav">${NAV.filter(n => !n[3] || n[3]()).map(([r,t,i]) =>
+      `<a href="#/${r}" class="${rota===r?'on':''}"><span class="ico">${i}</span>${t}${c[r] ? `<span class="cnt">${c[r]}</span>` : ''}</a>`).join('')}</nav>
+    <div class="me"><b>${esc(S.user.nome)}</b>${esc(S.user.area)} · ${esc(S.user.email)}<br><button data-a="sair">Sair</button></div>
+  </aside>
+  <main class="main">
+    <div class="top"><button class="btn sm menu-btn" data-a="menu">☰</button><h1>${titulo}</h1>${DEMO ? '<span class="demo-tag">Modo demonstração</span>' : ''}<span class="sp"></span>${acoes}</div>
+    ${corpo}
+  </main></div>`;
+}
+
+/* ---------- Início ---------- */
+function telaInicio(){
+  const P = S.data.pedidos, E = S.data.epis;
+  const ag = P.filter(p => p.Status === ST.AG), ap = P.filter(p => p.Status === ST.AP), pr = P.filter(p => p.Status === ST.PR);
+  const baixo = E.filter(e => num(e.EstoqueAtual) <= num(e.EstoqueMinimo));
+  const atras = P.filter(atrasado);
+  const pend = S.data.perguntas.filter(q => q.Status === 'Pendente');
+  const kpi = (n, l, cls, href) => `<div class="card kpi ${cls}" data-go="${href}"><div class="l">${l}</div><div class="n">${n}</div></div>`;
+
+  const atencao = [];
+  if(pode.aprovar()) ag.forEach(p => atencao.push([`${esc(p.Title)} aguardando sua aprovação`, `#/pedido/${p.id}`, ST.AG]));
+  atras.forEach(p => atencao.push([`${esc(p.Title)} com entrega atrasada (previsão ${fmtData(p.PrevisaoEntrega)})`, `#/pedido/${p.id}`, 'Atrasado']));
+  if(pode.responder()) pend.forEach(q => atencao.push([`Pergunta de ${esc(q.SolicitadoPor)}: “${esc(String(q.Pergunta).slice(0,60))}”`, '#/perguntas', 'Pendente']));
+  if(pode.criarPedido()) S.data.epis.map(e => [e, calc(e)]).filter(([e,c]) => c.sug > 0).sort((a,b) => (a[1].diasAteMin ?? 0) - (b[1].diasAteMin ?? 0)).slice(0,6)
+    .forEach(([e,c]) => atencao.push([`${esc(e.Title)}: chega no mínimo em ${fmtDias(c.diasAteMin)}, entrega leva ~${c.prazo} d → pedir ${c.sug}`, '#/estoque', 'Pedir já']));
+
+  const recentes = [...P].sort((a,b) => b.id - a.id).slice(0,8);
+  return shell('inicio', `Olá, ${esc(S.user.nome.split(' ')[0])}`, `
+  <div class="grid kpis">
+    ${kpi(ag.length,'Aguardando aprovação','k-amber','#/pedidos?f=' + encodeURIComponent(ST.AG))}
+    ${kpi(ap.length,'Aprovados · aguardando entrega','k-blue','#/pedidos?f=' + encodeURIComponent(ST.AP))}
+    ${kpi(pr.length,'Parcialmente recebidos','k-purple','#/pedidos?f=' + encodeURIComponent(ST.PR))}
+    ${kpi(baixo.length,'EPIs abaixo do mínimo','k-red','#/estoque')}
+    ${kpi(pend.length,'Perguntas pendentes','k-green','#/perguntas')}
+  </div>
+  <div class="grid two" style="margin-top:16px">
+    <div class="card"><h2>Pedidos recentes</h2>${tabelaPedidos(recentes)}</div>
+    <div class="card"><h2>Precisa de atenção</h2>${atencao.length ? `<table>${atencao.map(([t,h,s]) =>
+      `<tr class="click" data-go="${h}"><td>${t}</td><td class="num">${ST_CLASS[s] ? pill(s) : `<span class="pill ${s==='Atrasado'?'s-rc':'s-ag'}">${s}</span>`}</td></tr>`).join('')}</table>`
+      : '<div class="empty">Tudo em dia ✔</div>'}</div>
+  </div>`, pode.criarPedido() ? `<a class="btn pri" href="#/novo">＋ Novo pedido</a>` : '');
+}
+
+function tabelaPedidos(lista){
+  if(!lista.length) return '<div class="empty">Nenhum pedido.</div>';
+  return `<div class="scroll"><table><tr><th>Pedido</th><th>Solicitação</th><th class="hide-m">Solicitante</th><th class="hide-m">Itens</th><th class="hide-m">Previsão</th><th>Status</th></tr>
+  ${lista.map(p => { const its = itensDo(p.id); return `<tr class="click" data-go="#/pedido/${p.id}">
+    <td><b>${esc(p.Title)}</b></td><td>${fmtData(p.DataSolicitacao)}</td><td class="hide-m">${esc(p.Solicitante)}</td>
+    <td class="hide-m">${its.length}</td><td class="hide-m">${p.PrevisaoEntrega ? fmtData(p.PrevisaoEntrega) + (atrasado(p) ? ' <span class="pill s-rc">atrasado</span>' : '') : '—'}</td>
+    <td>${pill(p.Status)}</td></tr>`; }).join('')}</table></div>`;
+}
+
+/* ---------- Lista de pedidos ---------- */
+function telaPedidos(q){
+  if(q.f) S.filtros.pedidos = q.f;
+  const f = S.filtros.pedidos, b = norm(S.filtros.busca);
+  let lista = [...S.data.pedidos].sort((a,b) => b.id - a.id);
+  if(f === 'Abertos') lista = lista.filter(p => ABERTOS.includes(p.Status));
+  else if(f === 'Atrasados') lista = lista.filter(atrasado);
+  else if(f !== 'Todos') lista = lista.filter(p => p.Status === f);
+  if(b) lista = lista.filter(p => norm([p.Title, p.Solicitante, p.Fornecedor, p.NumeroPedidoFornecedor, ...itensDo(p.id).map(i => i.Title)].join(' ')).includes(b));
+  const abas = ['Abertos', ST.AG, ST.AP, ST.PR, 'Atrasados', ST.RE, ST.RC, ST.CA, 'Todos'];
+  return shell('pedidos','Pedidos', `<div class="card">
+    <div class="tabs">${abas.map(a => `<button class="${a===f?'on':''}" data-a="filtroPed" data-v="${esc(a)}">${esc(a)}</button>`).join('')}</div>
+    <div style="margin-bottom:12px"><input id="busca" placeholder="Buscar por número, item, solicitante, fornecedor…" value="${esc(S.filtros.busca)}"></div>
+    ${tabelaPedidos(lista)}</div>`, pode.criarPedido() ? `<a class="btn pri" href="#/novo">＋ Novo pedido</a>` : '');
+}
+
+/* ---------- Detalhe do pedido ---------- */
+function telaPedido(id){
+  const p = S.data.pedidos.find(x => x.id === Number(id));
+  if(!p) return shell('pedidos','Pedido não encontrado','<div class="card empty">Esse pedido não existe (ou foi removido).</div>');
+  const its = itensDo(p.id);
+  const ordem = [ST.AG, ST.AP, ST.PR, ST.RE], idx = ordem.indexOf(p.Status);
+  const etapas = [ST.RC, ST.CA].includes(p.Status) ? '' : `<div class="steps">${['Solicitado','Aprovado','Recebendo','Recebido'].map((t,i) =>
+      `<div class="${i <= idx ? 'done' : ''}">${t}</div>`).join('')}</div>`;
+
+  let acao = '';
+  if(p.Status === ST.AG && pode.aprovar()) acao = blocoAprovar(p, its);
+  else if([ST.AP, ST.PR].includes(p.Status) && pode.receber()) acao = blocoReceber(p, its);
+
+  const podeCancelar = p.Status === ST.AG && (pode.admin() || (pode.criarPedido() && norm(p.SolicitanteEmail) === norm(S.user.email)));
+  const podeEditarCompra = [ST.AP, ST.PR].includes(p.Status) && pode.aprovar();
+
+  const tabelaItens = `<div class="scroll"><table><tr><th>Item</th><th class="hide-m">Código</th><th class="num">Pedida</th><th class="num">Aprovada</th><th class="num">Recebida</th><th>Entrega</th></tr>
+    ${its.map(i => { const ap = num(i.QtdAprovada), rc = num(i.QtdRecebida), pc = ap ? Math.min(100, rc/ap*100) : 0;
+      return `<tr><td>${esc(i.Title)}</td><td class="hide-m">${esc(i.Codigo)}</td><td class="num">${num(i.QtdPedida)}</td>
+      <td class="num">${p.Status === ST.AG ? '—' : ap}</td><td class="num">${rc}</td>
+      <td>${p.Status === ST.AG ? '—' : `<div class="progress" title="${pc.toFixed(0)}%"><i style="width:${pc}%"></i></div>`}</td></tr>`; }).join('')}</table></div>`;
+
+  return shell('pedidos', `Pedido ${esc(p.Title)} ${pill(p.Status)}`, `
+  <div class="grid two">
+    <div class="grid" style="align-content:start">
+      <div class="card">${etapas}
+        <div class="dl" style="margin-top:12px">
+          <div><span>Solicitante</span><b>${esc(p.Solicitante)}</b></div>
+          <div><span>Data da solicitação</span><b>${fmtData(p.DataSolicitacao)}</b></div>
+          <div><span>Fornecedor</span><b>${esc(p.Fornecedor) || '—'}</b></div>
+          <div><span>Nº pedido ao fornecedor</span><b>${esc(p.NumeroPedidoFornecedor) || '—'}</b></div>
+          <div><span>Data do pedido ao fornecedor</span><b>${fmtData(p.DataPedidoFornecedor)}</b></div>
+          <div><span>Previsão de entrega</span><b>${fmtData(p.PrevisaoEntrega)} ${atrasado(p) ? '<span class="pill s-rc">atrasado</span>' : ''}</b></div>
+          <div><span>Aprovado por</span><b>${esc(p.AprovadoPor) || '—'}</b></div>
+        </div>
+        ${p.Observacao ? `<p style="margin:14px 0 0"><span class="muted small">OBSERVAÇÃO</span><br>${esc(p.Observacao)}</p>` : ''}
+        ${p.MotivoRecusa ? `<div class="alert err" style="margin:14px 0 0"><b>Motivo da recusa:</b> ${esc(p.MotivoRecusa)}</div>` : ''}
+        <div class="row" style="margin-top:14px">
+          ${podeEditarCompra ? `<button class="btn sm" data-a="editarCompra" data-id="${p.id}">Editar dados da compra</button>` : ''}
+          ${podeCancelar ? `<button class="btn sm bad" data-a="cancelar" data-id="${p.id}">Cancelar pedido</button>` : ''}
+          <button class="btn sm" data-a="perguntarPedido" data-ref="${esc(p.Title)}">Fazer uma pergunta</button>
+        </div>
+      </div>
+      ${acao || `<div class="card"><h2>Itens</h2>${tabelaItens}</div>`}
+      ${acao ? `<div class="card"><h2>Itens</h2>${tabelaItens}</div>` : ''}
+    </div>
+    <div class="card" style="align-self:start"><h2>Histórico</h2>
+      <ul class="timeline">${hist(p).slice().reverse().map(h => `<li><b>${esc(h.acao)}</b><div class="muted small">${esc(h.usuario)} · ${fmtDataHora(h.data)}</div></li>`).join('') || '<li class="muted">Sem registros</li>'}</ul>
+    </div>
+  </div>`, `<a class="btn" href="#/pedidos">← Voltar</a>`);
+}
+
+function blocoAprovar(p, its){
+  return `<div class="card" style="border-color:#f5d98b"><h2>Aprovar e registrar a compra</h2>
+  <p class="muted small" style="margin-top:-6px">Confirme as quantidades e preencha o que o fornecedor respondeu. Pode ajustar depois, se mudar.</p>
+  <div class="scroll"><table><tr><th>Item</th><th class="num">Pedida</th><th class="num">Aprovar</th></tr>
+  ${its.map(i => `<tr><td>${esc(i.Title)}</td><td class="num">${num(i.QtdPedida)}</td>
+    <td class="num"><input class="qty" type="number" min="0" data-aprov="${i.id}" value="${num(i.QtdAprovada) || num(i.QtdPedida)}"></td></tr>`).join('')}</table></div>
+  <div class="row" style="margin-top:14px">
+    <div class="fld"><label>Fornecedor</label><input id="apForn" value="${esc(p.Fornecedor)}"></div>
+    <div class="fld"><label>Nº do pedido ao fornecedor</label><input id="apNum" value="${esc(p.NumeroPedidoFornecedor)}"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div class="fld"><label>Data do pedido ao fornecedor</label><input id="apData" type="date" value="${p.DataPedidoFornecedor || hoje()}"></div>
+    <div class="fld"><label>Previsão de entrega</label><input id="apPrev" type="date" value="${esc(p.PrevisaoEntrega)}"></div>
+  </div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn bad" data-a="recusar" data-id="${p.id}">Recusar</button>
+    <button class="btn ok" data-a="aprovar" data-id="${p.id}">✔ Aprovar pedido</button>
+  </div></div>`;
+}
+
+function blocoReceber(p, its){
+  return `<div class="card" style="border-color:#bcd0ff"><h2>Registrar recebimento</h2>
+  <p class="muted small" style="margin-top:-6px">Informe o que chegou agora. O estoque é atualizado automaticamente.</p>
+  <div class="scroll"><table><tr><th>Item</th><th class="num">Aprovada</th><th class="num">Já recebida</th><th class="num">Falta</th><th class="num">Chegou agora</th></tr>
+  ${its.map(i => { const falta = Math.max(0, num(i.QtdAprovada) - num(i.QtdRecebida));
+    return `<tr><td>${esc(i.Title)}</td><td class="num">${num(i.QtdAprovada)}</td><td class="num">${num(i.QtdRecebida)}</td><td class="num">${falta}</td>
+    <td class="num"><input class="qty" type="number" min="0" data-receb="${i.id}" data-falta="${falta}" placeholder="0" ${falta ? '' : 'disabled'}></td></tr>`; }).join('')}</table></div>
+  <div class="row" style="margin-top:14px">
+    <div class="fld" style="max-width:220px"><label>Data do recebimento</label><input id="rcData" type="date" value="${hoje()}"></div>
+    <span class="sp" style="flex:1"></span>
+    <button class="btn" data-a="receberTudo">Preencher tudo que falta</button>
+    <button class="btn pri" data-a="receber" data-id="${p.id}">Confirmar recebimento</button>
+  </div></div>`;
+}
+
+/* ---------- Novo pedido ---------- */
+function telaNovo(){
+  if(!pode.criarPedido()) return shell('novo','Novo pedido','<div class="card empty">Apenas SHE pode criar pedidos.</div>');
+  const opcoes = [...S.data.epis].sort((a,b) => a.Title.localeCompare(b.Title));
+  const sug = S.data.epis.filter(e => sugestao(e) > 0);
+  return shell('novo','Novo pedido', `<div class="grid two">
+  <div class="card"><h2>Itens</h2>
+    <div class="row">
+      <div class="fld" style="flex:3"><label>Material de segurança</label>
+        <select id="nvEpi"><option value="">Selecione…</option>${opcoes.map(e => `<option value="${e.id}">${esc(e.Title)} — ${esc(e.Codigo)} (estoque ${num(e.EstoqueAtual)})</option>`).join('')}</select></div>
+      <div class="fld" style="max-width:120px"><label>Quantidade</label><input id="nvQtd" type="number" min="1"></div>
+      <button class="btn pri" data-a="addItem">Adicionar</button>
+    </div>
+    ${sug.length ? `<p class="small" style="margin:10px 0 0"><button class="btn sm" data-a="addSugeridos">＋ Adicionar os ${sug.length} itens com sugestão de compra</button></p>` : ''}
+    <div style="margin-top:14px">${S.rascunho.length ? `<table><tr><th>Item</th><th class="num">Quantidade</th><th></th></tr>
+      ${S.rascunho.map((r,ix) => { const e = epiPorId(r.epiId); return `<tr><td>${esc(e?.Title)}<div class="muted small">${esc(e?.Codigo)} · estoque ${num(e?.EstoqueAtual)} · mín ${num(e?.EstoqueMinimo)}</div></td>
+        <td class="num"><input class="qty" type="number" min="1" data-rq="${ix}" value="${r.qtd}"></td>
+        <td class="num"><button class="btn sm bad" data-a="rmItem" data-i="${ix}">Remover</button></td></tr>`; }).join('')}</table>`
+      : '<div class="empty">Nenhum item adicionado ainda.</div>'}</div>
+  </div>
+  <div class="card" style="align-self:start"><h2>Dados do pedido</h2>
+    <div class="fld"><label>Data da solicitação</label><input id="nvData" type="date" value="${hoje()}"></div>
+    <div class="fld" style="margin-top:10px"><label>Fornecedor sugerido (opcional)</label><input id="nvForn"></div>
+    <div class="fld" style="margin-top:10px"><label>Observação (opcional)</label><textarea id="nvObs" placeholder="Ex.: urgente para a parada de manutenção"></textarea></div>
+    <button class="btn pri" style="width:100%;justify-content:center;margin-top:16px" data-a="enviarPedido">Enviar para Compras</button>
+  </div></div>`);
+}
+
+/* ---------- Estoque ---------- */
+function telaEstoque(){
+  const b = norm(S.filtros.busca);
+  let lista = [...S.data.epis].sort((a,b) => a.Title.localeCompare(b.Title));
+  if(b) lista = lista.filter(e => norm([e.Title, e.Codigo, e.CA, e.Prioridade, situacaoEstoque(e)[0]].join(' ')).includes(b));
+  return shell('estoque','Estoque', `<div class="card">
+  <div style="margin-bottom:12px"><input id="busca" placeholder="Buscar por item, código, CA, prioridade ou situação (ex.: pedir já)…" value="${esc(S.filtros.busca)}"></div>
+  <div class="scroll"><table><tr><th>Código</th><th>Item</th><th class="num">Atual</th><th class="num hide-m">Mín</th>
+    <th class="num hide-m">Saída/dia</th><th class="num hide-m">Até o mín.</th><th class="num hide-m">Prazo</th><th class="num hide-m">A caminho</th><th class="num">Sugestão</th><th>Situação</th></tr>
+  ${lista.map(e => { const [t,cl] = situacaoEstoque(e), c = calc(e);
+    return `<tr class="click" data-a="verEpi" data-id="${e.id}">
+    <td>${esc(e.Codigo)}</td><td><b>${esc(e.Title)}</b><div class="muted small">${e.CA ? 'CA ' + esc(e.CA) : ''}${e.CA && e.Prioridade ? ' · ' : ''}${e.Prioridade ? 'Prioridade ' + esc(e.Prioridade) : ''}</div></td>
+    <td class="num"><b>${c.atual}</b></td><td class="num hide-m">${c.min}</td>
+    <td class="num hide-m">${fmtTaxa(c.sd)}</td><td class="num hide-m">${fmtDias(c.diasAteMin)}</td>
+    <td class="num hide-m" title="${c.real ? 'Média real de ' + c.real.n + ' entrega(s)' : 'Prazo cadastrado'}">${c.prazo} d${c.real ? '' : '*'}</td>
+    <td class="num hide-m">${c.aberto || '—'}</td><td class="num">${c.sug ? `<b>${c.sug}</b>` : '—'}</td><td><span class="pill ${cl}">${t}</span></td></tr>`; }).join('')
+    || '<tr><td colspan="10" class="empty">Nenhum EPI encontrado.</td></tr>'}</table></div>
+  <p class="muted small" style="margin:12px 0 0"><b>Até o mín.</b> = em quantos dias o estoque chega no mínimo, no ritmo de saída atual.
+  <b>Prazo</b> = média real das últimas entregas (com * quando ainda não há entrega registrada e vale o prazo cadastrado).
+  <b>Pedir já</b> = o estoque vai furar o mínimo antes de uma compra nova chegar. Clique num item para ver a conta.</p>
+  </div>`, `${pode.estoque() ? `<button class="btn" data-a="editarEpi" data-id="">＋ Novo EPI</button>` : ''}${S.data.epis.some(e => sugestao(e) > 0) && pode.criarPedido() ? `<button class="btn pri" data-a="pedirSugeridos">Pedir itens sugeridos</button>` : ''}`);
+}
+
+function blocoCalculo(e){
+  const c = calc(e), r = v => fmtTaxa(v);
+  return `<div style="background:#f6f8fb;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px" class="small">
+  <b style="font-size:13px">Como a sugestão foi calculada</b>
+  <table style="margin-top:6px">
+    <tr><td>Saída média</td><td class="num"><b>${r(c.sd)} por dia</b> <span class="muted">(${r(c.sd * 30)} por mês)</span></td></tr>
+    <tr><td>Prazo de entrega</td><td class="num"><b>${c.prazo} dias</b> <span class="muted">${c.real ? `(média real de ${c.real.n} entrega${c.real.n > 1 ? 's' : ''})` : '(cadastrado)'}</span></td></tr>
+    <tr><td>Estoque chega no mínimo em</td><td class="num"><b>${fmtDias(c.diasAteMin)}</b> <span class="muted">· acaba em ${fmtDias(c.diasAteZero)}</span></td></tr>
+    <tr><td>Sai durante o prazo (${r(c.sd)} × ${c.prazo})</td><td class="num">${Math.ceil(c.sd * c.prazo)}</td></tr>
+    <tr><td>+ estoque mínimo</td><td class="num">${c.min}</td></tr>
+    <tr><td>− estoque atual</td><td class="num">${c.atual}</td></tr>
+    <tr><td>− já pedido / a caminho</td><td class="num">${c.aberto}</td></tr>
+    <tr><td><b>= Sugestão de compra</b></td><td class="num"><b>${c.sug}</b></td></tr>
+  </table></div>`;
+}
+function modalEpi(e, leitura){
+  e = e || {};
+  const dis = leitura ? 'disabled' : '';
+  const f = (id, l, v, t='text') => `<div class="fld"><label>${l}</label><input id="${id}" type="${t}" value="${esc(v ?? '')}" ${dis}></div>`;
+  modal(`<h3>${leitura ? esc(e.Title) : e.id ? 'Editar EPI' : 'Novo EPI'}</h3>
+  ${e.id ? blocoCalculo(e) : ''}
+  ${f('eNome','Nome do item *',e.Title)}
+  <div class="row" style="margin-top:10px">${f('eCod','Código *',e.Codigo)}${f('eCA','C.A.',e.CA)}</div>
+  <div class="row" style="margin-top:10px">${f('eAtual','Estoque atual',num(e.EstoqueAtual),'number')}${f('eMin','Estoque mínimo',num(e.EstoqueMinimo),'number')}${f('eMax','Estoque máximo',num(e.EstoqueMaximo),'number')}</div>
+  <div class="row" style="margin-top:10px">${f('ePrazo','Prazo cadastrado (dias)',num(e.PrazoEntregaDias),'number')}
+    <div class="fld"><label>Prioridade</label><select id="ePrio" ${dis}>${['','Alta','Média','Baixa'].map(o => `<option ${o===(e.Prioridade||'')?'selected':''}>${o}</option>`).join('')}</select></div></div>
+  <p class="muted small" style="margin:8px 0 0">O prazo cadastrado só é usado até existir a primeira entrega registrada; depois vale a média real.</p>
+  <div class="row" style="margin-top:18px;justify-content:flex-end">${leitura ? '<button class="btn" data-a="fechar">Fechar</button>'
+    : `<button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="salvarEpi" data-id="${e.id || ''}">Salvar</button>`}</div>`);
+}
+
+/* ---------- Consumo (saídas) ---------- */
+function telaConsumo(){
+  const b = norm(S.filtros.busca);
+  let lista = [...S.data.consumo].sort((a,b) => (b.DataFim||'').localeCompare(a.DataFim||'') || String(a.Title).localeCompare(b.Title));
+  if(b) lista = lista.filter(c => norm([c.Title, c.Codigo, fmtData(c.DataInicio), fmtData(c.DataFim)].join(' ')).includes(b));
+  const resumo = S.data.epis.map(e => { const regs = S.data.consumo.filter(c => norm(c.Codigo) === norm(e.Codigo));
+      return { e, c: calc(e), n: regs.length, ult: regs.map(r => r.DataFim).sort().pop() }; })
+    .filter(r => r.n).sort((a,b) => b.c.sd - a.c.sd);
+  return shell('consumo','Saídas (consumo)', `
+  <div class="card"><h2>Ritmo de saída por item</h2>${resumo.length ? `<div class="scroll"><table><tr><th>Item</th><th class="num">Saída/dia</th><th class="num hide-m">Saída/mês</th>
+    <th class="num">Até o mín.</th><th class="num hide-m">Prazo</th><th class="num hide-m">Períodos</th><th class="hide-m">Último lançamento</th></tr>
+    ${resumo.map(r => `<tr class="click" data-a="verEpi" data-id="${r.e.id}"><td>${esc(r.e.Title)} <span class="muted small">${esc(r.e.Codigo)}</span></td>
+      <td class="num"><b>${fmtTaxa(r.c.sd)}</b></td><td class="num hide-m">${fmtTaxa(r.c.sd * 30)}</td>
+      <td class="num">${r.c.diasAteMin != null && r.c.diasAteMin <= r.c.prazo ? `<span class="pill s-mid">${fmtDias(r.c.diasAteMin)}</span>` : fmtDias(r.c.diasAteMin)}</td>
+      <td class="num hide-m">${r.c.prazo} d${r.c.real ? '' : '*'}</td><td class="num hide-m">${r.n}</td><td class="hide-m">${fmtData(r.ult)}</td></tr>`).join('')}</table></div>
+    <p class="muted small" style="margin:10px 0 0">Saída/dia = total que saiu ÷ total de dias dos períodos lançados nos últimos ${CONFIG.diasHistorico} dias. Em destaque: itens que chegam no mínimo antes do prazo de entrega.</p>`
+    : '<div class="empty">Ainda não há saídas lançadas. Importe o relatório do outro sistema ou lance manualmente.</div>'}</div>
+  <div class="card" style="margin-top:16px"><h2>Lançamentos</h2>
+    <div style="margin-bottom:12px"><input id="busca" placeholder="Filtrar por item, código ou data…" value="${esc(S.filtros.busca)}"></div>
+    <div class="scroll"><table><tr><th>Período</th><th class="num hide-m">Dias</th><th>Código</th><th>Item</th><th class="num">Saiu</th><th class="num hide-m">Por dia</th>${pode.estoque() ? '<th></th>' : ''}</tr>
+    ${lista.slice(0,300).map(c => { const n = diasPeriodo(c); return `<tr><td>${fmtData(c.DataInicio)} – ${fmtData(c.DataFim)}</td><td class="num hide-m">${n}</td><td>${esc(c.Codigo)}</td><td>${esc(c.Title)}</td>
+      <td class="num">${num(c.QtdSaida)}</td><td class="num hide-m">${n ? fmtTaxa(num(c.QtdSaida) / n) : '—'}</td>
+      ${pode.estoque() ? `<td class="num"><button class="btn sm bad" data-a="rmConsumo" data-id="${c.id}">Excluir</button></td>` : ''}</tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nada encontrado.</td></tr>'}</table></div>
+    ${lista.length > 300 ? `<p class="muted small">Mostrando 300 de ${lista.length}. Use o filtro.</p>` : ''}
+  </div>`, pode.estoque() ? `<button class="btn" data-a="novoConsumo">＋ Lançar saída</button><button class="btn pri" data-a="importar">Importar relatório</button>` : '');
+}
+
+function modalImportar(){
+  modal(`<h3>Importar saídas (Excel ou CSV)</h3>
+  <p class="muted small" style="margin-top:-8px">A planilha precisa ter as colunas <code>Código</code> e <code>Quantidade</code> (a <code>Descrição</code> é opcional).
+  Se ela tiver colunas de data (<code>De</code>/<code>Até</code>, <code>Data inicial</code>/<code>Data final</code> ou <code>Mês/Ano</code>), elas são usadas.
+  Se não tiver, vale o período abaixo — o mesmo que você colocou no outro sistema.</p>
+  <div class="row"><div class="fld"><label>De</label><input id="impDe" type="date" value="${mesesAtras(1)}-01"></div>
+  <div class="fld"><label>Até</label><input id="impAte" type="date" value="${new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0,10)}"></div></div>
+  <input type="file" id="arq" accept=".xlsx,.xls,.csv" style="margin-top:12px">
+  <div id="prev" style="margin-top:12px"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" id="btnImp" data-a="confirmarImport" disabled>Importar</button></div>`);
+  $('#arq').addEventListener('change', lerPlanilha);
+  ['#impDe','#impAte'].forEach(id => $(id).addEventListener('change', () => { if($('#arq').files[0]) lerPlanilha({ target: $('#arq') }); }));
+}
+let linhasImport = [];
+async function lerPlanilha(ev){
+  const arq = ev.target.files[0]; if(!arq) return;
+  $('#prev').innerHTML = '<span class="muted">Lendo…</span>';
+  try {
+    let linhas;
+    if(/\.csv$/i.test(arq.name)){
+      const txt = await arq.text(), l1 = txt.split('\n')[0], sep = (l1.match(/;/g)||[]).length >= (l1.match(/,/g)||[]).length ? ';' : ',';
+      const [cab, ...rs] = txt.split(/\r?\n/).filter(l => l.trim()).map(l => l.split(sep).map(c => c.replace(/^"|"$/g,'').trim()));
+      linhas = rs.map(r => Object.fromEntries(cab.map((c,i) => [c, r[i]])));
+    } else {
+      if(!window.XLSX) await carregarScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+      const wb = XLSX.read(await arq.arrayBuffer(), { cellDates:true });
+      linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
+    }
+    const chave = k => norm(k).replace(/[^a-z]/g,'');
+    const achar = (obj, ...nomes) => { for(const k of Object.keys(obj)) if(nomes.includes(chave(k))) return obj[k]; return ''; };
+    const de = $('#impDe').value, ate = $('#impAte').value;
+    let semData = 0;
+    linhasImport = linhas.map(l => {
+      let ini = paraData(achar(l,'de','datainicial','datainicio','inicio','periodoinicial','dtinicial'));
+      let fim = paraData(achar(l,'ate','datafinal','datafim','fim','periodofinal','dtfinal'));
+      if(!ini || !fim){ const m = paraMesAno(achar(l,'mesano','mes','competencia','periodo'));
+        if(m){ ini = m + '-01'; const [a, mm] = m.split('-').map(Number); fim = new Date(Date.UTC(a, mm, 0)).toISOString().slice(0,10); } }
+      if(!ini || !fim){ ini = de; fim = ate; semData++; }
+      return { Codigo: String(achar(l,'codigo','cod','codproduto','codigoproduto')).trim(),
+        Title: String(achar(l,'descricao','item','produto','material','descricaoproduto')).trim(),
+        DataInicio: ini, DataFim: fim, QtdSaida: num(achar(l,'quantidade','qtd','qtde','quantidadesaida','saida','consumo','quantidadeconsumida')) };
+    }).filter(l => l.Codigo && l.QtdSaida > 0 && l.DataInicio && l.DataFim && l.DataFim >= l.DataInicio);
+    const desconhecidos = new Set();
+    for(const l of linhasImport){ const e = S.data.epis.find(e => norm(e.Codigo) === norm(l.Codigo));
+      if(!e) desconhecidos.add(l.Codigo); if(!l.Title) l.Title = e?.Title || l.Codigo; }
+    $('#prev').innerHTML = linhasImport.length
+      ? `<div class="alert">${linhasImport.length} saídas encontradas (de ${linhas.length} linhas)${semData ? ` · ${semData} usando o período ${fmtData(de)} – ${fmtData(ate)}` : ''}.<br>
+         Ex.: ${esc(linhasImport[0].Codigo)} · ${fmtData(linhasImport[0].DataInicio)} – ${fmtData(linhasImport[0].DataFim)} · ${linhasImport[0].QtdSaida}
+         ${desconhecidos.size ? `<br><b>Atenção:</b> ${desconhecidos.size} código(s) não existem no Estoque (${esc([...desconhecidos].slice(0,5).join(', '))}${desconhecidos.size > 5 ? '…' : ''}). Serão importados, mas só entram no cálculo quando o EPI for cadastrado com esse código.` : ''}</div>`
+      : `<div class="alert err">Não encontrei linhas válidas. Confira se há colunas "Código" e "Quantidade".</div>`;
+    $('#btnImp').disabled = !linhasImport.length;
+  } catch(e){ $('#prev').innerHTML = `<div class="alert err">Erro ao ler: ${esc(e.message)}</div>`; }
+}
+function paraData(v){
+  if(v instanceof Date && !isNaN(v)) return new Date(v.getTime() - v.getTimezoneOffset() * 6e4).toISOString().slice(0,10);
+  if(typeof v === 'number' && v > 20000) return new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0,10);
+  const s = String(v || '').trim(); let m;
+  if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${pad(m[2],2)}-${pad(m[3],2)}`;
+  if((m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/))) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2],2)}-${pad(m[1],2)}`;
+  return '';
+}
+function paraMesAno(v){
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,7);
+  if(typeof v === 'number' && v > 20000){ const d = new Date(Math.round((v - 25569) * 864e5)); return d.toISOString().slice(0,7); }
+  const s = String(v||'').trim(); let m;
+  if((m = s.match(/^(\d{4})[-/](\d{1,2})$/))) return `${m[1]}-${pad(m[2],2)}`;
+  if((m = s.match(/^(\d{1,2})[-/](\d{4})$/))) return `${m[2]}-${pad(m[1],2)}`;
+  const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  if((m = norm(s).match(/^([a-z]{3})[a-z]*[\s/-]*(\d{2,4})$/)) && meses.includes(m[1])) return `${m[2].length===2?'20'+m[2]:m[2]}-${pad(meses.indexOf(m[1])+1,2)}`;
+  return '';
+}
+
+/* ---------- Perguntas ---------- */
+function telaPerguntas(){
+  const f = S.filtros.perg;
+  let lista = [...S.data.perguntas].sort((a,b) => b.id - a.id);
+  if(f === 'Pendentes') lista = lista.filter(q => q.Status === 'Pendente');
+  else if(f === 'Respondidas') lista = lista.filter(q => q.Status === 'Respondido');
+  else if(f === 'Minhas') lista = lista.filter(q => q.SolicitadoPor === S.user.nome);
+  return shell('perguntas','Perguntas', `<div class="card">
+    <div class="tabs">${['Pendentes','Respondidas','Minhas','Todas'].map(a => `<button class="${a===f?'on':''}" data-a="filtroPerg" data-v="${a}">${a}</button>`).join('')}</div>
+    ${lista.length ? lista.map(q => `<div style="border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div class="row" style="align-items:center"><b>${q.Tipo === 'Pedido' ? '📋 Pedido' : '📦 Item'}: ${esc(q.Referencia)}</b><span class="sp" style="flex:1"></span>
+        <span class="pill ${q.Status==='Pendente'?'s-ag':'s-re'}">${esc(q.Status)}</span></div>
+      <p style="margin:8px 0 4px">${esc(q.Pergunta)}</p>
+      <div class="muted small">${esc(q.SolicitadoPor)} · ${fmtDataHora(q.DataSolicitacao)}</div>
+      ${q.Resposta ? `<div style="background:#f3f7ff;border-radius:8px;padding:10px;margin-top:10px"><b class="small">Resposta de ${esc(q.RespondidoPor)} · ${fmtDataHora(q.DataResposta)}</b><br>${esc(q.Resposta)}</div>`
+        : pode.responder() ? `<div class="row" style="margin-top:10px"><div class="fld" style="flex:4"><textarea data-resp="${q.id}" placeholder="Escreva a resposta…" style="min-height:44px"></textarea></div>
+          <button class="btn pri" data-a="responder" data-id="${q.id}">Responder</button></div>` : ''}
+    </div>`).join('') : '<div class="empty">Nenhuma pergunta aqui.</div>'}
+  </div>`, `<button class="btn pri" data-a="novaPergunta">＋ Nova pergunta</button>`);
+}
+function modalPergunta(tipo='Pedido', ref=''){
+  const peds = [...S.data.pedidos].sort((a,b) => b.id - a.id), epis = [...S.data.epis].sort((a,b) => a.Title.localeCompare(b.Title));
+  modal(`<h3>Nova pergunta</h3>
+  <div class="row"><div class="fld"><label>Sobre</label><select id="pqTipo"><option ${tipo==='Pedido'?'selected':''}>Pedido</option><option ${tipo==='Item'?'selected':''}>Item</option></select></div>
+  <div class="fld" style="flex:2"><label>Qual?</label><select id="pqRef"></select></div></div>
+  <div class="fld" style="margin-top:10px"><label>Pergunta</label><textarea id="pqTxt"></textarea></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="enviarPergunta">Enviar</button></div>`);
+  const enche = () => { const t = $('#pqTipo').value;
+    $('#pqRef').innerHTML = (t === 'Pedido' ? peds.map(p => `<option ${p.Title===ref?'selected':''}>${esc(p.Title)}</option>`) : epis.map(e => `<option ${e.Title===ref?'selected':''}>${esc(e.Title)}</option>`)).join(''); };
+  $('#pqTipo').addEventListener('change', enche); enche(); $('#pqTxt').focus();
+}
+
+/* ---------- Usuários ---------- */
+function telaUsuarios(){
+  return shell('usuarios','Usuários', `<div class="card">
+  <p class="muted small" style="margin-top:0">Cada pessoa cria a própria conta (e-mail + senha) na tela de entrada; ela só consegue usar o app depois de cadastrada aqui com o mesmo e-mail. Áreas: <b>SHE</b> (pede, recebe, cuida do estoque), <b>Compras</b> (aprova, registra a compra, responde perguntas) e <b>Admin</b> (tudo).</p>
+  <table><tr><th>Nome</th><th>E-mail</th><th>Área</th><th></th></tr>
+  ${S.data.usuarios.map(u => `<tr><td>${esc(u.Title)}</td><td>${esc(u.Email)}</td><td>${esc(u.Area)}</td><td class="num"><button class="btn sm" data-a="editarUsuario" data-id="${u.id}">Editar</button></td></tr>`).join('')}</table>
+  </div>`, `<button class="btn pri" data-a="editarUsuario" data-id="">＋ Novo usuário</button>`);
+}
+function modalUsuario(u){
+  u = u || {};
+  modal(`<h3>${u.id ? 'Editar usuário' : 'Novo usuário'}</h3>
+  <div class="fld"><label>Nome</label><input id="uNome" value="${esc(u.Title)}"></div>
+  <div class="fld" style="margin-top:10px"><label>E-mail da empresa</label><input id="uEmail" type="email" value="${esc(u.Email)}"></div>
+  <div class="fld" style="margin-top:10px"><label>Área</label><select id="uArea">${['SHE','Compras','Admin'].map(a => `<option ${a===u.Area?'selected':''}>${a}</option>`).join('')}</select></div>
+  <div class="row" style="margin-top:18px;justify-content:flex-end">${u.id ? `<button class="btn bad" data-a="rmUsuario" data-id="${u.id}">Remover</button><span style="flex:1"></span>` : ''}
+  <button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="salvarUsuario" data-id="${u.id || ''}">Salvar</button></div>`);
+}
+
+/* ---------- Configurações ---------- */
+function telaConfig(){
+  return shell('config','Configurações', DEMO ? `<div class="card">
+    <h2>Modo demonstração</h2>
+    <p>Os dados ficam salvos <b>só neste navegador</b>. Para usar com a equipe, preencha <code>supabaseUrl</code> e <code>supabaseAnonKey</code> no início do arquivo <code>index.html</code>.</p>
+    <button class="btn bad" data-a="resetDemo">Restaurar dados de exemplo</button></div>`
+  : `<div class="card"><h2>Conexão</h2>
+    <div class="dl"><div><span>Servidor</span><b>${esc(CONFIG.supabaseUrl)}</b></div><div><span>Conectado como</span><b>${esc(sessao?.user?.email)}</b></div>
+    <div><span>Janela do cálculo de saída</span><b>${CONFIG.diasHistorico} dias</b></div></div>
+    <p class="muted small" style="margin-top:14px">Para trocar a senha de alguém ou apagar uma conta: painel do Supabase → Authentication → Users.</p></div>`);
+}
+
+/* ============================== login =============================== */
+function telaLoginDemo(){
+  const us = S.data.usuarios;
+  $('#app').innerHTML = `<div class="login"><div class="box"><div class="logo">EPI</div><h1>SIGEPI</h1>
+  <p class="muted" style="margin-top:0">Modo demonstração — escolha um perfil para testar:</p>
+  ${us.map(u => `<button class="profile" data-a="entrarDemo" data-id="${u.id}"><span class="av">${iniciais(u.Title)}</span><span><b>${esc(u.Title)}</b><br><span class="muted small">${esc(u.Area)} · ${esc(u.Email)}</span></span></button>`).join('')}
+  </div></div>`;
+}
+function telaLoginReal(modo = 'entrar', aviso = ''){
+  const criar = modo === 'criar';
+  $('#app').innerHTML = `<div class="login"><div class="box"><div class="logo">EPI</div><h1>SIGEPI</h1>
+  <p class="muted" style="margin-top:0">${criar ? 'Criar sua conta' : 'Controle de pedidos de EPI · SHE e Compras'}</p>
+  ${aviso}
+  <form id="fLogin" novalidate>
+    ${criar ? '<div class="fld" style="margin-top:10px"><label>Seu nome</label><input id="lNome" autocomplete="name"></div>' : ''}
+    <div class="fld" style="margin-top:10px"><label>E-mail da empresa</label><input id="lEmail" type="email" autocomplete="username"></div>
+    <div class="fld" style="margin-top:10px"><label>Senha${criar ? ' (mín. 6 caracteres)' : ''}</label><input id="lSenha" type="password" autocomplete="${criar ? 'new-password' : 'current-password'}"></div>
+    <button class="btn pri" id="lBtn" style="width:100%;justify-content:center;margin-top:16px">${criar ? 'Criar conta' : 'Entrar'}</button>
+  </form>
+  <p class="small" style="text-align:center;margin:14px 0 0">${criar ? 'Já tem conta? <a href="#" data-a="modoEntrar">Entrar</a>' : 'Primeiro acesso? <a href="#" data-a="modoCriar">Criar conta</a>'}</p>
+  </div></div>`;
+  $('#lEmail').focus();
+  $('#fLogin').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const email = $('#lEmail').value.trim().toLowerCase(), senha = $('#lSenha').value, nome = criar ? $('#lNome').value.trim() : '';
+    if(!email.includes('@') || !senha || (criar && !nome)) return toast('Preencha todos os campos.', 'warn');
+    const btn = $('#lBtn'); btn.disabled = true; btn.textContent = 'Aguarde…';
+    try {
+      if(criar){
+        const d = chk(await sb.auth.signUp({ email, password: senha, options: { data: { nome }, emailRedirectTo: location.origin + location.pathname } }));
+        if(!d.session) return telaLoginReal('entrar', `<div class="alert">Conta criada! Enviamos um e-mail para <b>${esc(email)}</b>. Clique no link de confirmação e depois entre aqui.</div>`);
+      } else chk(await sb.auth.signInWithPassword({ email, password: senha }));
+      location.hash = ''; location.reload();
+    } catch(e){ toast(e.message, 'err', 7000); btn.disabled = false; btn.textContent = criar ? 'Criar conta' : 'Entrar'; }
+  });
+}
+function telaSemAcesso(email){
+  $('#app').innerHTML = `<div class="login"><div class="box"><div class="logo">EPI</div><h1>Acesso não liberado</h1>
+  <p>A conta <b>${esc(email)}</b> foi criada, mas ainda não está cadastrada no SIGEPI.</p><p class="muted">Peça para um administrador te adicionar em <b>Usuários</b> com este mesmo e-mail. Depois é só entrar de novo.</p>
+  <button class="btn" data-a="sair">Sair</button></div></div>`;
+}
+
+/* ============================== roteador ============================= */
+function render(){
+  if(!S.user) return;
+  const [rota, qs] = (location.hash.slice(2) || 'inicio').split('?');
+  const q = Object.fromEntries(new URLSearchParams(qs || ''));
+  const [base, arg] = rota.split('/');
+  if(S.rotaAnterior !== base){ S.filtros.busca = ''; S.rotaAnterior = base; }
+  const telas = { inicio:telaInicio, pedidos:() => telaPedidos(q), pedido:() => telaPedido(arg), novo:telaNovo, estoque:telaEstoque,
+    consumo:telaConsumo, perguntas:telaPerguntas, usuarios:telaUsuarios, config:telaConfig };
+  const y = window.scrollY;
+  $('#app').innerHTML = (telas[base] || telaInicio)();
+  if(S.manterScroll) window.scrollTo(0, y); S.manterScroll = false;
+  const busca = $('#busca');
+  if(busca){ busca.addEventListener('input', () => { S.filtros.busca = busca.value; const pos = busca.selectionStart; render();
+    const b2 = $('#busca'); b2.focus(); b2.setSelectionRange(pos,pos); }); }
+}
+window.addEventListener('hashchange', () => { closeModal(); render(); window.scrollTo(0,0); });
+
+/* ============================== ações =============================== */
+const A = {
+  menu(){ $('#side').classList.toggle('open'); },
+  fechar(){ closeModal(); },
+  async sair(){ if(DEMO){ S.user = null; try{ sessionStorage.removeItem('sigepi-demo-user'); }catch(e){} telaLoginDemo(); } else { await sb.auth.signOut(); location.hash = ''; location.reload(); } },
+  entrarDemo(el){ const u = S.data.usuarios.find(x => x.id === Number(el.dataset.id)); S.user = { nome:u.Title, email:u.Email, area:u.Area };
+    try{ sessionStorage.setItem('sigepi-demo-user', u.id); }catch(e){} location.hash = '#/inicio'; render(); },
+  modoCriar(){ telaLoginReal('criar'); },
+  modoEntrar(){ telaLoginReal('entrar'); },
+  filtroPed(el){ S.filtros.pedidos = el.dataset.v; if(location.hash.includes('?')) location.hash = '#/pedidos'; else render(); },
+  filtroPerg(el){ S.filtros.perg = el.dataset.v; render(); },
+
+  /* --- novo pedido --- */
+  addItem(){
+    const id = Number($('#nvEpi').value), q = num($('#nvQtd').value);
+    if(!id || q <= 0) return toast('Escolha o item e uma quantidade maior que zero.', 'warn');
+    const ex = S.rascunho.find(r => r.epiId === id); ex ? ex.qtd += q : S.rascunho.push({ epiId:id, qtd:q });
+    render(); $('#nvEpi').focus();
+  },
+  addSugeridos(){ for(const e of S.data.epis.filter(e => sugestao(e) > 0)) if(!S.rascunho.some(r => r.epiId === e.id)) S.rascunho.push({ epiId:e.id, qtd:sugestao(e) }); render(); },
+  pedirSugeridos(){ A.addSugeridos(); location.hash = '#/novo'; },
+  rmItem(el){ S.rascunho.splice(Number(el.dataset.i), 1); render(); },
+  async enviarPedido(el){
+    document.querySelectorAll('[data-rq]').forEach(i => S.rascunho[Number(i.dataset.rq)].qtd = num(i.value));
+    const itens = S.rascunho.filter(r => r.qtd > 0);
+    if(!itens.length) return toast('Adicione pelo menos um item.', 'warn');
+    let criado;
+    const ok = await salvar(el, async () => {
+      const base = { Title:'(gerando número)', Status:ST.AG, Solicitante:S.user.nome, SolicitanteEmail:S.user.email,
+        DataSolicitacao: $('#nvData').value || hoje(), Fornecedor: $('#nvForn').value.trim(), Observacao: $('#nvObs').value.trim(),
+        Historico: JSON.stringify([{ data:agora(), usuario:S.user.nome, acao:'Pedido criado e enviado para Compras' }]) };
+      const p = await Store.add('pedidos', base);
+      const numero = 'PED-' + pad(p.id);           // número vem do ID da lista → nunca repete
+      await Store.update('pedidos', p.id, { Title: numero });
+      for(const r of itens){ const e = epiPorId(r.epiId);
+        await Store.add('itens', { Title:e.Title, PedidoId:p.id, EpiId:e.id, Codigo:e.Codigo, QtdPedida:r.qtd, QtdAprovada:0, QtdRecebida:0 }); }
+      criado = { id:p.id, numero };
+      await recarregar('pedidos','itens');
+    });
+    if(ok){ S.rascunho = []; toast(`Pedido ${criado.numero} enviado para Compras!`); location.hash = '#/pedido/' + criado.id; }
+  },
+
+  /* --- aprovação (Compras) --- */
+  async aprovar(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    const qs = [...document.querySelectorAll('[data-aprov]')].map(i => ({ id:Number(i.dataset.aprov), q:num(i.value) }));
+    if(qs.some(x => x.q < 0)) return toast('Quantidade não pode ser negativa.', 'warn');
+    if(!qs.some(x => x.q > 0)) return toast('Aprove ao menos uma quantidade, ou use "Recusar".', 'warn');
+    const prev = $('#apPrev').value;
+    if(!prev && !await confirmar('O pedido está sem previsão de entrega. Aprovar mesmo assim?', 'Aprovar')) return;
+    const ok = await salvar(el, async () => {
+      for(const x of qs) await Store.update('itens', x.id, { QtdAprovada:x.q });
+      await Store.update('pedidos', p.id, { Status:ST.AP, AprovadoPor:S.user.nome, Fornecedor:$('#apForn').value.trim(),
+        NumeroPedidoFornecedor:$('#apNum').value.trim(), DataPedidoFornecedor:$('#apData').value, PrevisaoEntrega:prev,
+        Historico: comHist(p, `Aprovado${$('#apNum').value.trim() ? ' · pedido ao fornecedor ' + $('#apNum').value.trim() : ''}${prev ? ' · previsão ' + fmtData(prev) : ''}`) });
+      await recarregar('pedidos','itens');
+    }, `Pedido ${p.Title} aprovado!`);
+    if(ok) render();
+  },
+  recusar(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    modal(`<h3>Recusar ${esc(p.Title)}</h3><div class="fld"><label>Motivo (o solicitante vai ver)</label><textarea id="mot"></textarea></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Voltar</button><button class="btn bad" data-a="confirmarRecusa" data-id="${p.id}">Recusar pedido</button></div>`);
+  },
+  async confirmarRecusa(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id)), m = $('#mot').value.trim();
+    if(!m) return toast('Escreva o motivo.', 'warn');
+    if(await salvar(el, async () => { await Store.update('pedidos', p.id, { Status:ST.RC, MotivoRecusa:m, Historico:comHist(p, 'Recusado: ' + m) }); await recarregar('pedidos'); }, 'Pedido recusado.')){ closeModal(); render(); }
+  },
+  cancelar(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    modal(`<h3>Cancelar ${esc(p.Title)}?</h3><p class="muted">O pedido sai da fila de Compras. Isso fica registrado no histórico.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-a="fechar">Voltar</button><button class="btn bad" data-a="confirmarCancelar" data-id="${p.id}">Cancelar pedido</button></div>`);
+  },
+  async confirmarCancelar(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    if(await salvar(el, async () => { await Store.update('pedidos', p.id, { Status:ST.CA, Historico:comHist(p, 'Cancelado pelo solicitante') }); await recarregar('pedidos'); }, 'Pedido cancelado.')){ closeModal(); render(); }
+  },
+  editarCompra(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    modal(`<h3>Dados da compra · ${esc(p.Title)}</h3>
+    <div class="row"><div class="fld"><label>Fornecedor</label><input id="ecForn" value="${esc(p.Fornecedor)}"></div><div class="fld"><label>Nº pedido ao fornecedor</label><input id="ecNum" value="${esc(p.NumeroPedidoFornecedor)}"></div></div>
+    <div class="row" style="margin-top:10px"><div class="fld"><label>Data do pedido</label><input id="ecData" type="date" value="${esc(p.DataPedidoFornecedor)}"></div><div class="fld"><label>Previsão de entrega</label><input id="ecPrev" type="date" value="${esc(p.PrevisaoEntrega)}"></div></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="salvarCompra" data-id="${p.id}">Salvar</button></div>`);
+  },
+  async salvarCompra(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id)), prev = $('#ecPrev').value;
+    const mudou = prev !== (p.PrevisaoEntrega || '') ? `Previsão alterada para ${fmtData(prev)}` : 'Dados da compra atualizados';
+    if(await salvar(el, async () => { await Store.update('pedidos', p.id, { Fornecedor:$('#ecForn').value.trim(), NumeroPedidoFornecedor:$('#ecNum').value.trim(),
+      DataPedidoFornecedor:$('#ecData').value, PrevisaoEntrega:prev, Historico:comHist(p, mudou) }); await recarregar('pedidos'); }, 'Atualizado.')){ closeModal(); render(); }
+  },
+
+  /* --- recebimento (SHE) --- */
+  receberTudo(){ document.querySelectorAll('[data-receb]').forEach(i => { if(!i.disabled) i.value = i.dataset.falta; }); },
+  async receber(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id));
+    const ent = [...document.querySelectorAll('[data-receb]')].map(i => ({ id:Number(i.dataset.receb), q:num(i.value), falta:num(i.dataset.falta) })).filter(x => x.q > 0);
+    if(!ent.length) return toast('Informe a quantidade que chegou em pelo menos um item.', 'warn');
+    const exc = ent.filter(x => x.q > x.falta);
+    if(exc.length && !await confirmar('Algum item está chegando em quantidade MAIOR que a que falta. Registrar mesmo assim?', 'Registrar')) return;
+    const data = $('#rcData').value || hoje();
+    const ok = await salvar(el, async () => {
+      await recarregar('epis','itens');                 // pega o estoque mais recente antes de somar
+      for(const x of ent){
+        const it = S.data.itens.find(i => i.id === x.id);
+        await Store.update('itens', it.id, { QtdRecebida: num(it.QtdRecebida) + x.q, DataRecebimento: data, ...(it.DataPrimeiroRecebimento ? {} : { DataPrimeiroRecebimento: data }) });
+        const e = epiPorId(it.EpiId);
+        if(e) await Store.update('epis', e.id, { EstoqueAtual: num(e.EstoqueAtual) + x.q });
+      }
+      await recarregar('itens','epis');
+      const completo = itensDo(p.id).every(i => num(i.QtdRecebida) >= num(i.QtdAprovada));
+      const resumo = ent.map(x => `${x.q}× ${S.data.itens.find(i => i.id === x.id).Title}`).join(', ');
+      await Store.update('pedidos', p.id, { Status: completo ? ST.RE : ST.PR, Historico: comHist(p, `Recebido: ${resumo}${completo ? ' · pedido completo' : ''}`) });
+      await recarregar('pedidos');
+    }, 'Recebimento registrado e estoque atualizado!');
+    if(ok) render();
+  },
+
+  /* --- estoque --- */
+  editarEpi(el){ if(!pode.estoque()) return; modalEpi(el.dataset.id ? epiPorId(el.dataset.id) : null); },
+  verEpi(el){ modalEpi(epiPorId(el.dataset.id), !pode.estoque()); },
+  async salvarEpi(el){
+    const campos = { Title:$('#eNome').value.trim(), Codigo:$('#eCod').value.trim(), CA:$('#eCA').value.trim(), EstoqueAtual:num($('#eAtual').value),
+      EstoqueMinimo:num($('#eMin').value), EstoqueMaximo:num($('#eMax').value), PrazoEntregaDias:num($('#ePrazo').value), Prioridade:$('#ePrio').value };
+    if(!campos.Title || !campos.Codigo) return toast('Nome e código são obrigatórios.', 'warn');
+    const id = Number(el.dataset.id);
+    if(S.data.epis.some(e => norm(e.Codigo) === norm(campos.Codigo) && e.id !== id)) return toast('Já existe um EPI com esse código.', 'warn');
+    if(await salvar(el, async () => { id ? await Store.update('epis', id, campos) : await Store.add('epis', campos); await recarregar('epis'); }, 'EPI salvo!')){ closeModal(); S.manterScroll = true; render(); }
+  },
+
+  /* --- consumo --- */
+  importar(){ linhasImport = []; modalImportar(); },
+  async confirmarImport(el){
+    const total = linhasImport.length; let feitos = 0;
+    // mesmo código + mesmo período = substitui (dá para reimportar sem duplicar)
+    const existentes = new Map(S.data.consumo.map(c => [norm(c.Codigo) + '|' + c.DataInicio + '|' + c.DataFim, c]));
+    if(await salvar(el, async () => {
+      for(const l of linhasImport){
+        const ex = existentes.get(norm(l.Codigo) + '|' + l.DataInicio + '|' + l.DataFim);
+        ex ? await Store.update('consumo', ex.id, l) : await Store.add('consumo', l);
+        el.textContent = `Salvando ${++feitos}/${total}…`;
+      }
+      await recarregar('consumo');
+    }, `${total} saídas importadas.`)){ closeModal(); render(); }
+  },
+  novoConsumo(){
+    const epis = [...S.data.epis].sort((a,b) => a.Title.localeCompare(b.Title));
+    modal(`<h3>Lançar saída</h3>
+    <p class="muted small" style="margin-top:-8px">Informe o período que você consultou no outro sistema e quanto saiu nele.</p>
+    <div class="fld"><label>Item</label><select id="cEpi">${epis.map(e => `<option value="${e.id}">${esc(e.Title)} — ${esc(e.Codigo)}</option>`).join('')}</select></div>
+    <div class="row" style="margin-top:10px"><div class="fld"><label>De</label><input id="cDe" type="date" value="${mesesAtras(1)}-01"></div>
+    <div class="fld"><label>Até</label><input id="cAte" type="date" value="${new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0,10)}"></div></div>
+    <div class="fld" style="margin-top:10px"><label>Quantidade que saiu</label><input id="cQtd" type="number" min="0"></div>
+    <div id="cPrev" class="small muted" style="margin-top:8px"></div>
+    <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="cBaixa" style="width:auto"> Dar baixa no estoque atual também</label>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="salvarConsumo">Salvar</button></div>`);
+    const prev = () => { const n = diasPeriodo({ DataInicio:$('#cDe').value, DataFim:$('#cAte').value }), q = num($('#cQtd').value);
+      $('#cPrev').textContent = n && q ? `${n} dias · ${fmtTaxa(q / n)} por dia` : n ? `${n} dias` : 'Período inválido'; };
+    ['#cDe','#cAte','#cQtd'].forEach(id => $(id).addEventListener('input', prev)); prev();
+  },
+  async salvarConsumo(el){
+    const e = epiPorId($('#cEpi').value), q = num($('#cQtd').value), de = $('#cDe').value, ate = $('#cAte').value, baixa = $('#cBaixa').checked;
+    if(!e || !de || !ate || q <= 0) return toast('Preencha item, período e quantidade.', 'warn');
+    if(ate < de) return toast('A data "Até" precisa ser depois do "De".', 'warn');
+    if(await salvar(el, async () => {
+      const ex = S.data.consumo.find(c => norm(c.Codigo) === norm(e.Codigo) && c.DataInicio === de && c.DataFim === ate);
+      const campos = { Title:e.Title, Codigo:e.Codigo, DataInicio:de, DataFim:ate, QtdSaida:q };
+      ex ? await Store.update('consumo', ex.id, campos) : await Store.add('consumo', campos);
+      if(baixa){ await recarregar('epis'); const atual = epiPorId(e.id); await Store.update('epis', e.id, { EstoqueAtual: Math.max(0, num(atual.EstoqueAtual) - q) }); }
+      await recarregar('consumo','epis');
+    }, 'Saída lançada.')){ closeModal(); render(); }
+  },
+  async rmConsumo(el){ if(!await confirmar('Excluir este lançamento de saída?', 'Excluir', true)) return;
+    if(await salvar(el, async () => { await Store.remove('consumo', Number(el.dataset.id)); await recarregar('consumo'); }, 'Excluído.')){ S.manterScroll = true; render(); } },
+
+  /* --- perguntas --- */
+  novaPergunta(){ modalPergunta(); },
+  perguntarPedido(el){ modalPergunta('Pedido', el.dataset.ref); },
+  async enviarPergunta(el){
+    const t = $('#pqTxt').value.trim(), ref = $('#pqRef').value;
+    if(!t || !ref) return toast('Escolha a referência e escreva a pergunta.', 'warn');
+    if(await salvar(el, async () => { await Store.add('perguntas', { Title: ref, Tipo:$('#pqTipo').value, Referencia:ref, Pergunta:t, SolicitadoPor:S.user.nome,
+      DataSolicitacao:agora(), Status:'Pendente' }); await recarregar('perguntas'); }, 'Pergunta enviada!')){ closeModal(); if(location.hash.startsWith('#/perguntas')) render(); }
+  },
+  async responder(el){
+    const id = Number(el.dataset.id), r = document.querySelector(`[data-resp="${id}"]`).value.trim();
+    if(!r) return toast('Escreva a resposta.', 'warn');
+    if(await salvar(el, async () => { await Store.update('perguntas', id, { Resposta:r, RespondidoPor:S.user.nome, DataResposta:agora(), Status:'Respondido' }); await recarregar('perguntas'); }, 'Resposta enviada!')){ S.manterScroll = true; render(); }
+  },
+
+  /* --- usuários --- */
+  editarUsuario(el){ modalUsuario(el.dataset.id ? S.data.usuarios.find(u => u.id === Number(el.dataset.id)) : null); },
+  async salvarUsuario(el){
+    const c = { Title:$('#uNome').value.trim(), Email:$('#uEmail').value.trim().toLowerCase(), Area:$('#uArea').value }, id = Number(el.dataset.id);
+    if(!c.Title || !c.Email.includes('@')) return toast('Preencha nome e e-mail válido.', 'warn');
+    if(S.data.usuarios.some(u => norm(u.Email) === c.Email && u.id !== id)) return toast('Esse e-mail já está cadastrado.', 'warn');
+    if(await salvar(el, async () => { id ? await Store.update('usuarios', id, c) : await Store.add('usuarios', c); await recarregar('usuarios'); }, 'Usuário salvo!')){ closeModal(); render(); }
+  },
+  async rmUsuario(el){
+    const u = S.data.usuarios.find(x => x.id === Number(el.dataset.id));
+    if(norm(u.Email) === norm(S.user.email)) return toast('Você não pode remover a si mesmo.', 'warn');
+    if(!await confirmar(`Remover ${u.Title} do SIGEPI?`, 'Remover', true)) return;
+    if(await salvar(el, async () => { await Store.remove('usuarios', u.id); await recarregar('usuarios'); }, 'Removido.')){ closeModal(); render(); }
+  },
+
+  /* --- config --- */
+  async resetDemo(){ if(await confirmar('Apagar tudo e voltar aos dados de exemplo?', 'Restaurar', true)){ DemoStore.reset(); try{ sessionStorage.removeItem('sigepi-demo-user'); }catch(e){} location.hash = ''; location.reload(); } },
+};
+document.addEventListener('click', ev => {
+  const go = ev.target.closest('[data-go]'); if(go && !ev.target.closest('button,input,a')){ location.hash = go.dataset.go; return; }
+  const el = ev.target.closest('[data-a]'); if(!el || !el.dataset.a || !A[el.dataset.a]) return;
+  if(el.tagName === 'TR' && ev.target.closest('button,input')) return;
+  ev.preventDefault(); A[el.dataset.a](el);
+});
+document.addEventListener('keydown', ev => {
+  if(ev.key === 'Escape') closeModal();
+  if(ev.key === 'Enter' && (ev.target.id === 'nvQtd')) A.addItem();
+});
+
+/* ============================ inicialização =========================== */
+async function iniciar(){
+  try {
+    await Store.init();
+    if(DEMO){
+      await recarregar();
+      let uid = null; try { uid = Number(sessionStorage.getItem('sigepi-demo-user')); } catch(e){}
+      const u = S.data.usuarios.find(x => x.id === uid);
+      if(u){ S.user = { nome:u.Title, email:u.Email, area:u.Area }; render(); } else telaLoginDemo();
+      return;
+    }
+    if(!sessao) return telaLoginReal();
+    const email = norm(sessao.user.email);
+    let area = chk(await sb.rpc('minha_area'));
+    if(!area){
+      if(chk(await sb.rpc('existe_usuario'))) return telaSemAcesso(sessao.user.email);
+      // primeiríssimo acesso: quem configurou vira Admin
+      await Store.add('usuarios', { Title: sessao.user.user_metadata?.nome || email.split('@')[0], Email: email, Area:'Admin' });
+      toast('Bem-vindo! Você é o Admin. Cadastre a equipe em Usuários.', 'ok', 8000);
+    }
+    await recarregar();
+    const u = S.data.usuarios.find(x => norm(x.Email) === email);
+    if(!u) return telaSemAcesso(sessao.user.email);
+    S.user = { nome:u.Title, email:u.Email, area:u.Area };
+    render();
+  } catch(e){
+    console.error(e);
+    $('#app').innerHTML = `<div class="login"><div class="box"><h1>Não consegui conectar</h1><div class="alert err" style="margin-top:12px">${esc(e.message || e)}</div>
+      <p class="muted small">Confira o supabaseUrl e o supabaseAnonKey no início do arquivo, e se o supabase.sql foi executado.</p>
+      <button class="btn" onclick="location.reload()">Tentar de novo</button></div></div>`;
+  }
+}
+
+/* ========================= dados de exemplo (demo) ===================== */
+function seed(){
+  const epis = [
+    ['Luva nitrílica descartável','EPI-001','38.125',420,300,900,10,'Alta'],
+    ['Óculos de proteção incolor','EPI-002','10.346',35,40,120,15,'Alta'],
+    ['Protetor auricular tipo plug','EPI-003','5.745',190,200,600,10,'Média'],
+    ['Capacete de segurança classe B','EPI-004','31.469',8,10,40,20,'Média'],
+    ['Botina de segurança (bico PVC)','EPI-005','42.291',22,15,50,25,'Alta'],
+    ['Respirador PFF2','EPI-006','46.537',60,80,250,15,'Alta'],
+    ['Creme protetor de pele grupo 3','EPI-007','11.065',14,10,30,12,'Baixa'],
+    ['Avental de raspa','EPI-008','19.732',5,6,20,20,'Baixa'],
+    ['Luva de vaqueta','EPI-009','28.104',48,40,120,15,'Média'],
+    ['Protetor facial incolor','EPI-010','15.822',7,8,20,20,'Média'],
+    ['Cinto paraquedista','EPI-011','35.529',3,4,10,30,'Alta'],
+    ['Respirador semifacial','EPI-012','40.312',12,10,25,20,'Média'],
+  ].map((e,i) => ({ id:i+1, Title:e[0], Codigo:e[1], CA:e[2], EstoqueAtual:e[3], EstoqueMinimo:e[4], EstoqueMaximo:e[5], PrazoEntregaDias:e[6], Prioridade:e[7] }));
+  const usuarios = [
+    { id:1, Title:'Ana Souza', Email:'ana.souza@empresa.com', Area:'SHE' },
+    { id:2, Title:'Bruno Lima', Email:'bruno.lima@empresa.com', Area:'Compras' },
+    { id:3, Title:'Carla Mendes', Email:'carla.mendes@empresa.com', Area:'Admin' },
+  ];
+  const base = [300,25,180,4,8,70,6,3,30,3,1,4];
+  const consumo = []; let cid = 0;
+  for(let m = 7; m >= 1; m--){ const ini = mesesAtras(m) + '-01', [a, mm] = mesesAtras(m).split('-').map(Number), fim = new Date(Date.UTC(a, mm, 0)).toISOString().slice(0,10);
+    epis.forEach((e,i) => consumo.push({ id:++cid, Title:e.Title, Codigo:e.Codigo, DataInicio:ini, DataFim:fim,
+      QtdSaida: Math.max(0, Math.round(base[i] * (0.8 + ((i*7 + m*13) % 9) / 20))) })); }
+  const d = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0,10); };
+  const h = (dias, u, acao) => ({ data: new Date(Date.now() + dias*864e5).toISOString(), usuario:u, acao });
+  const pedidos = [
+    { id:1, Title:'PED-0001', Status:ST.RE, Solicitante:'Ana Souza', SolicitanteEmail:'ana.souza@empresa.com', DataSolicitacao:d(-40), Fornecedor:'Protege EPIs Ltda', NumeroPedidoFornecedor:'OC-55120', DataPedidoFornecedor:d(-38), PrevisaoEntrega:d(-25), AprovadoPor:'Bruno Lima', Observacao:'',
+      Historico: JSON.stringify([h(-40,'Ana Souza','Pedido criado e enviado para Compras'), h(-38,'Bruno Lima','Aprovado · pedido ao fornecedor OC-55120'), h(-26,'Ana Souza','Recebido: 500× Luva nitrílica descartável, 200× Protetor auricular tipo plug · pedido completo')]) },
+    { id:2, Title:'PED-0002', Status:ST.PR, Solicitante:'Ana Souza', SolicitanteEmail:'ana.souza@empresa.com', DataSolicitacao:d(-15), Fornecedor:'SafeWork Distribuidora', NumeroPedidoFornecedor:'OC-55871', DataPedidoFornecedor:d(-14), PrevisaoEntrega:d(-2), AprovadoPor:'Bruno Lima', Observacao:'',
+      Historico: JSON.stringify([h(-15,'Ana Souza','Pedido criado e enviado para Compras'), h(-14,'Bruno Lima','Aprovado · pedido ao fornecedor OC-55871'), h(-4,'Ana Souza','Recebido: 100× Respirador PFF2')]) },
+    { id:3, Title:'PED-0003', Status:ST.AP, Solicitante:'Ana Souza', SolicitanteEmail:'ana.souza@empresa.com', DataSolicitacao:d(-6), Fornecedor:'Protege EPIs Ltda', NumeroPedidoFornecedor:'OC-56002', DataPedidoFornecedor:d(-5), PrevisaoEntrega:d(9), AprovadoPor:'Bruno Lima', Observacao:'',
+      Historico: JSON.stringify([h(-6,'Ana Souza','Pedido criado e enviado para Compras'), h(-5,'Bruno Lima','Aprovado · pedido ao fornecedor OC-56002')]) },
+    { id:4, Title:'PED-0004', Status:ST.AG, Solicitante:'Ana Souza', SolicitanteEmail:'ana.souza@empresa.com', DataSolicitacao:d(-1), Fornecedor:'', NumeroPedidoFornecedor:'', DataPedidoFornecedor:'', PrevisaoEntrega:'', AprovadoPor:'', Observacao:'Urgente: parada de manutenção no dia 25.',
+      Historico: JSON.stringify([h(-1,'Ana Souza','Pedido criado e enviado para Compras')]) },
+  ];
+  const it = (id,pid,eid,qp,qa,qr,dr='') => ({ id, Title:epis[eid-1].Title, PedidoId:pid, EpiId:eid, Codigo:epis[eid-1].Codigo, QtdPedida:qp, QtdAprovada:qa, QtdRecebida:qr, DataRecebimento:dr, DataPrimeiroRecebimento:dr });
+  const itens = [ it(1,1,1,500,500,500,d(-26)), it(2,1,3,200,200,200,d(-26)), it(3,2,6,200,200,100,d(-4)), it(4,2,2,60,50,0), it(5,3,5,20,20,0), it(6,3,9,40,40,0), it(7,4,10,10,0,0), it(8,4,12,6,0,0), it(9,4,7,12,0,0) ];
+  const perguntas = [
+    { id:1, Title:'PED-0002', Tipo:'Pedido', Referencia:'PED-0002', Pergunta:'Os óculos já têm data para chegar? A previsão passou.', SolicitadoPor:'Ana Souza', DataSolicitacao:new Date(Date.now()-864e5).toISOString(), Status:'Pendente' },
+    { id:2, Title:'Respirador PFF2', Tipo:'Item', Referencia:'Respirador PFF2', Pergunta:'Dá para trocar o fornecedor do PFF2? O último lote veio com elástico fraco.', SolicitadoPor:'Ana Souza', DataSolicitacao:new Date(Date.now()-5*864e5).toISOString(),
+      Resposta:'Sim, cotei com mais dois fornecedores. No próximo pedido já vem da SafeWork.', RespondidoPor:'Bruno Lima', DataResposta:new Date(Date.now()-4*864e5).toISOString(), Status:'Respondido' },
+  ];
+  return { __ok:true, epis, usuarios, pedidos, itens, consumo, perguntas,
+    seq:{ epis:epis.length, usuarios:3, pedidos:4, itens:9, consumo:cid, perguntas:2 } };
+}
+
+iniciar();
+</script>
+</body>
+</html>
