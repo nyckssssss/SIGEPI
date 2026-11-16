@@ -288,9 +288,16 @@ function saidaDia(e){
   let regs = saidasDoItem(e);
   const recentes = regs.filter(c => (c.DataFim || '') >= somaDias(-CONFIG.diasHistorico));
   if(recentes.length) regs = recentes;
-  let q = 0, d = 0;
   const div = mesmoCodigo(e);   // código compartilhado (tamanhos/cores): a saída "só por código" é dividida igualmente
-  for(const c of regs){ const n = diasPeriodo(c); if(n){ q += num(c.QtdSaida) / (c.EpiId ? 1 : div); d += n; } }
+  // várias linhas do mesmo período (uma por saída) = um período só: soma as quantidades, conta os dias UMA vez
+  const per = new Map();
+  for(const c of regs){ const n = diasPeriodo(c); if(!n) continue;
+    const k = c.DataInicio + '|' + c.DataFim, g = per.get(k) || { ini:c.DataInicio, fim:c.DataFim, n, q:0 };
+    g.q += num(c.QtdSaida) / (c.EpiId ? 1 : div); per.set(k, g); }
+  // períodos que se sobrepõem (ex.: relatório anual + um mês dentro dele): vale o mais longo, para não contar em dobro
+  const usados = [];
+  for(const g of [...per.values()].sort((a,b) => b.n - a.n)) if(!usados.some(x => g.ini <= x.fim && g.fim >= x.ini)) usados.push(g);
+  const q = usados.reduce((t,g) => t + g.q, 0), d = usados.reduce((t,g) => t + g.n, 0);
   return d ? q / d : 0;
 }
 /** Prazo real = média de dias entre o pedido ao fornecedor e a 1ª entrega do item */
@@ -321,8 +328,12 @@ function calc(e){
   return { sd, real, prazo, atual, min, aberto, diasAteMin, diasAteZero, sug };
 }
 const sugestao = e => calc(e).sug;
+const numQtd = v => { if(typeof v === 'number') return v; const t = String(v ?? '').trim();
+  return /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t) ? num(t.replace(/\./g, '')) : num(t); };
 const fmtDias = d => d == null ? '—' : d >= 999 ? '999+' : Math.floor(d) + ' d';
-const fmtTaxa = v => v ? (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace('.', ',')) : '—';
+const fmtTaxa = v => v ? (v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1).replace('.', ',') : v.toFixed(2).replace('.', ',')) : '—';
+const fmtAteMin = c => c.atual <= c.min ? '<span class="pill s-low">no mínimo</span>' : fmtDias(c.diasAteMin);
+const fmtPrazo = c => c.real ? c.prazo + ' d' : c.prazo ? c.prazo + ' d*' : '<span class="muted">sem prazo</span>';
 function situacaoEstoque(e){
   const c = calc(e);
   if(c.atual <= c.min) return ['Abaixo do mínimo','s-low'];
@@ -373,7 +384,7 @@ function telaInicio(){
   atras.forEach(p => atencao.push([`${esc(p.Title)} com entrega atrasada (previsão ${fmtData(p.PrevisaoEntrega)})`, `#/pedido/${p.id}`, 'Atrasado']));
   if(pode.responder()) pend.forEach(q => atencao.push([`Pergunta de ${esc(q.SolicitadoPor)}: “${esc(String(q.Pergunta).slice(0,60))}”`, '#/perguntas', 'Pendente']));
   if(pode.criarPedido()) S.data.epis.map(e => [e, calc(e)]).filter(([e,c]) => c.sug > 0).sort((a,b) => (a[1].diasAteMin ?? 0) - (b[1].diasAteMin ?? 0)).slice(0,6)
-    .forEach(([e,c]) => atencao.push([`${esc(e.Title)}: chega no mínimo em ${fmtDias(c.diasAteMin)}, entrega leva ~${c.prazo} d → pedir ${c.sug}`, '#/estoque', 'Pedir já']));
+    .forEach(([e,c]) => atencao.push([`${esc(e.Title)}: ${c.atual <= c.min ? 'já no mínimo' : 'chega no mínimo em ' + fmtDias(c.diasAteMin)}, entrega leva ~${c.prazo} d → pedir ${c.sug}`, '#/estoque', 'Pedir já']));
 
   const recentes = [...P].sort((a,b) => b.id - a.id).slice(0,8);
   return shell('inicio', `Olá, ${esc(S.user.nome.split(' ')[0])}`, `
@@ -546,8 +557,8 @@ function telaEstoque(){
     return `<tr class="click" data-a="verEpi" data-id="${e.id}">
     <td>${esc(e.Codigo)}</td><td><b>${esc(e.Title)}</b><div class="muted small">${e.CA ? 'CA ' + esc(e.CA) : ''}${e.CA && e.Prioridade ? ' · ' : ''}${e.Prioridade ? 'Prioridade ' + esc(e.Prioridade) : ''}</div></td>
     <td class="num"><b>${c.atual}</b></td><td class="num hide-m">${c.min}</td>
-    <td class="num hide-m">${fmtTaxa(c.sd)}</td><td class="num hide-m">${fmtDias(c.diasAteMin)}</td>
-    <td class="num hide-m" title="${c.real ? 'Média real de ' + c.real.n + ' entrega(s)' : 'Prazo cadastrado'}">${c.prazo} d${c.real ? '' : '*'}</td>
+    <td class="num hide-m">${fmtTaxa(c.sd)}</td><td class="num hide-m">${fmtAteMin(c)}</td>
+    <td class="num hide-m" title="${c.real ? 'Média real de ' + c.real.n + ' entrega(s)' : 'Prazo cadastrado'}">${fmtPrazo(c)}</td>
     <td class="num hide-m">${c.aberto || '—'}</td><td class="num">${c.sug ? `<b>${c.sug}</b>` : '—'}</td><td><span class="pill ${cl}">${t}</span></td></tr>`; }).join('')
     || '<tr><td colspan="10" class="empty">Nenhum EPI encontrado.</td></tr>'}</table></div>
   <p class="muted small" style="margin:12px 0 0"><b>Até o mín.</b> = em quantos dias o estoque chega no mínimo, no ritmo de saída atual.
@@ -564,7 +575,7 @@ function blocoCalculo(e){
     <tr><td>Saída média</td><td class="num"><b>${r(c.sd)} por dia</b> <span class="muted">(${r(c.sd * 30)} por mês)</span></td></tr>
     ${mesmoCodigo(e) > 1 ? `<tr><td colspan="2" class="muted">O código ${esc(e.Codigo)} é usado por ${mesmoCodigo(e)} itens. Saídas lançadas só pelo código (relatório do outro sistema) são divididas igualmente entre eles.</td></tr>` : ''}
     <tr><td>Prazo de entrega</td><td class="num"><b>${c.prazo} dias</b> <span class="muted">${c.real ? `(média real de ${c.real.n} entrega${c.real.n > 1 ? 's' : ''})` : '(cadastrado)'}</span></td></tr>
-    <tr><td>Estoque chega no mínimo em</td><td class="num"><b>${fmtDias(c.diasAteMin)}</b> <span class="muted">· acaba em ${fmtDias(c.diasAteZero)}</span></td></tr>
+    <tr><td>Estoque chega no mínimo em</td><td class="num"><b>${c.atual <= c.min ? 'já está no mínimo' : fmtDias(c.diasAteMin)}</b> <span class="muted">· acaba em ${fmtDias(c.diasAteZero)}</span></td></tr>
     <tr><td>Sai durante o prazo (${r(c.sd)} × ${c.prazo})</td><td class="num">${Math.ceil(c.sd * c.prazo)}</td></tr>
     <tr><td>+ estoque mínimo</td><td class="num">${c.min}</td></tr>
     <tr><td>− estoque atual</td><td class="num">${c.atual}</td></tr>
@@ -786,8 +797,8 @@ function telaConsumo(){
     <th class="num">Até o mín.</th><th class="num hide-m">Prazo</th><th class="num hide-m">Períodos</th><th class="hide-m">Último lançamento</th></tr>
     ${resumo.map(r => `<tr class="click" data-a="verEpi" data-id="${r.e.id}"><td>${esc(r.e.Title)} <span class="muted small">${esc(r.e.Codigo)}</span></td>
       <td class="num"><b>${fmtTaxa(r.c.sd)}</b></td><td class="num hide-m">${fmtTaxa(r.c.sd * 30)}</td>
-      <td class="num">${r.c.diasAteMin != null && r.c.diasAteMin <= r.c.prazo ? `<span class="pill s-mid">${fmtDias(r.c.diasAteMin)}</span>` : fmtDias(r.c.diasAteMin)}</td>
-      <td class="num hide-m">${r.c.prazo} d${r.c.real ? '' : '*'}</td><td class="num hide-m">${r.n}</td><td class="hide-m">${fmtData(r.ult)}</td></tr>`).join('')}</table></div>
+      <td class="num">${r.c.atual <= r.c.min ? fmtAteMin(r.c) : r.c.diasAteMin != null && r.c.diasAteMin <= r.c.prazo ? `<span class="pill s-mid">${fmtDias(r.c.diasAteMin)}</span>` : fmtDias(r.c.diasAteMin)}</td>
+      <td class="num hide-m">${fmtPrazo(r.c)}</td><td class="num hide-m">${r.n}</td><td class="hide-m">${fmtData(r.ult)}</td></tr>`).join('')}</table></div>
     <p class="muted small" style="margin:10px 0 0">Saída/dia = total que saiu ÷ total de dias dos períodos lançados nos últimos ${CONFIG.diasHistorico} dias. Em destaque: itens que chegam no mínimo antes do prazo de entrega.</p>`
     : '<div class="empty">Ainda não há saídas lançadas. Importe o relatório do outro sistema ou lance manualmente.</div>'}</div>
   <div class="card" style="margin-top:16px"><h2>Lançamentos</h2>
@@ -831,13 +842,17 @@ async function lerPlanilha(ev){
       if(!ini || !fim){ ini = de; fim = ate; semData++; }
       return { Codigo: String(achar(l,'codigo','cod','codproduto','codigoproduto')).trim(),
         Title: String(achar(l,'descricao','item','produto','material','descricaoproduto')).trim(),
-        DataInicio: ini, DataFim: fim, QtdSaida: num(achar(l,'quantidade','qtd','qtde','quantidadesaida','saida','consumo','quantidadeconsumida')) };
+        DataInicio: ini, DataFim: fim, QtdSaida: numQtd(achar(l,'quantidade','qtd','qtde','quantidadesaida','saida','consumo','quantidadeconsumida')) };
     }).filter(l => l.Codigo && l.QtdSaida > 0 && l.DataInicio && l.DataFim && l.DataFim >= l.DataInicio);
+    const brutas = linhasImport.length, grupos = new Map();
+    for(const l of linhasImport){ const k = norm(l.Codigo) + '|' + l.DataInicio + '|' + l.DataFim, g = grupos.get(k);
+      g ? (g.QtdSaida += l.QtdSaida, g.Title ||= l.Title) : grupos.set(k, { ...l }); }
+    linhasImport = [...grupos.values()];
     const desconhecidos = new Set();
     for(const l of linhasImport){ const e = S.data.epis.find(e => norm(e.Codigo) === norm(l.Codigo));
       if(!e) desconhecidos.add(l.Codigo); if(!l.Title) l.Title = e?.Title || l.Codigo; }
     $('#prev').innerHTML = linhasImport.length
-      ? `<div class="alert">${linhasImport.length} saídas encontradas (de ${linhas.length} linhas)${semData ? ` · ${semData} usando o período ${fmtData(de)} – ${fmtData(ate)}` : ''}.<br>
+      ? `<div class="alert">${linhasImport.length} itens com saída${brutas > linhasImport.length ? ` (${brutas} linhas somadas por item)` : ''}${semData ? ` · ${semData} usando o período ${fmtData(de)} – ${fmtData(ate)}` : ''}.<br>
          Ex.: ${esc(linhasImport[0].Codigo)} · ${fmtData(linhasImport[0].DataInicio)} – ${fmtData(linhasImport[0].DataFim)} · ${linhasImport[0].QtdSaida}
          ${desconhecidos.size ? `<br><b>Atenção:</b> ${desconhecidos.size} código(s) não existem no Estoque (${esc([...desconhecidos].slice(0,5).join(', '))}${desconhecidos.size > 5 ? '…' : ''}). Serão importados, mas só entram no cálculo quando o EPI for cadastrado com esse código.` : ''}</div>`
       : `<div class="alert err">Não encontrei linhas válidas. Confira se há colunas "Código" e "Quantidade".</div>`;
@@ -1142,11 +1157,14 @@ const A = {
   async confirmarImport(el){
     const total = linhasImport.length; let feitos = 0;
     // mesmo código + mesmo período = substitui (dá para reimportar sem duplicar)
-    const existentes = new Map(S.data.consumo.map(c => [norm(c.Codigo) + '|' + c.DataInicio + '|' + c.DataFim, c]));
+    // (lançamentos ligados a um item específico, EpiId, não são mexidos)
+    const existentes = new Map();
+    for(const c of S.data.consumo.filter(c => !c.EpiId)){ const k = norm(c.Codigo) + '|' + c.DataInicio + '|' + c.DataFim; (existentes.get(k) || existentes.set(k, []).get(k)).push(c); }
     if(await salvar(el, async () => {
       for(const l of linhasImport){
-        const ex = existentes.get(norm(l.Codigo) + '|' + l.DataInicio + '|' + l.DataFim);
+        const [ex, ...sobra] = existentes.get(norm(l.Codigo) + '|' + l.DataInicio + '|' + l.DataFim) || [];
         ex ? await Store.update('consumo', ex.id, l) : await Store.add('consumo', l);
+        for(const x of sobra) await Store.remove('consumo', x.id);   // linhas antigas do mesmo período viram uma só
         el.textContent = `Salvando ${++feitos}/${total}…`;
       }
       await recarregar('consumo');
