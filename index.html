@@ -279,12 +279,18 @@ const somaDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return
 const diasPeriodo = c => { const d = diasEntre(c.DataInicio, c.DataFim); return d == null || d < 0 ? 0 : d + 1; };
 
 /** Saída média por dia = soma do que saiu ÷ soma dos dias dos períodos lançados (janela recente) */
-function saidaDia(codigo){
-  let regs = S.data.consumo.filter(c => norm(c.Codigo) === norm(codigo));
+const mesmoCodigo = e => S.data.epis.filter(x => norm(x.Codigo) === norm(e.Codigo)).length || 1;
+/** Lançamentos que valem para o item: os ligados a ele (EpiId) + os só por código (vindos do outro sistema) */
+function saidasDoItem(e){
+  return S.data.consumo.filter(c => c.EpiId ? Number(c.EpiId) === e.id : norm(c.Codigo) === norm(e.Codigo));
+}
+function saidaDia(e){
+  let regs = saidasDoItem(e);
   const recentes = regs.filter(c => (c.DataFim || '') >= somaDias(-CONFIG.diasHistorico));
   if(recentes.length) regs = recentes;
   let q = 0, d = 0;
-  for(const c of regs){ const n = diasPeriodo(c); if(n){ q += num(c.QtdSaida); d += n; } }
+  const div = mesmoCodigo(e);   // código compartilhado (tamanhos/cores): a saída "só por código" é dividida igualmente
+  for(const c of regs){ const n = diasPeriodo(c); if(n){ q += num(c.QtdSaida) / (c.EpiId ? 1 : div); d += n; } }
   return d ? q / d : 0;
 }
 /** Prazo real = média de dias entre o pedido ao fornecedor e a 1ª entrega do item */
@@ -307,7 +313,7 @@ function emAberto(epiId){
 }
 /** Todos os indicadores de um EPI */
 function calc(e){
-  const sd = saidaDia(e.Codigo), real = prazoReal(e.id), prazo = real ? real.dias : num(e.PrazoEntregaDias);
+  const sd = saidaDia(e), real = prazoReal(e.id), prazo = real ? real.dias : num(e.PrazoEntregaDias);
   const atual = num(e.EstoqueAtual), min = num(e.EstoqueMinimo), aberto = emAberto(e.id);
   const diasAteMin = sd > 0 ? Math.max(0, (atual - min) / sd) : null;   // quantos dias até bater no mínimo
   const diasAteZero = sd > 0 ? atual / sd : null;                        // quantos dias até acabar
@@ -556,6 +562,7 @@ function blocoCalculo(e){
   <b style="font-size:13px">Como a sugestão foi calculada</b>
   <table style="margin-top:6px">
     <tr><td>Saída média</td><td class="num"><b>${r(c.sd)} por dia</b> <span class="muted">(${r(c.sd * 30)} por mês)</span></td></tr>
+    ${mesmoCodigo(e) > 1 ? `<tr><td colspan="2" class="muted">O código ${esc(e.Codigo)} é usado por ${mesmoCodigo(e)} itens. Saídas lançadas só pelo código (relatório do outro sistema) são divididas igualmente entre eles.</td></tr>` : ''}
     <tr><td>Prazo de entrega</td><td class="num"><b>${c.prazo} dias</b> <span class="muted">${c.real ? `(média real de ${c.real.n} entrega${c.real.n > 1 ? 's' : ''})` : '(cadastrado)'}</span></td></tr>
     <tr><td>Estoque chega no mínimo em</td><td class="num"><b>${fmtDias(c.diasAteMin)}</b> <span class="muted">· acaba em ${fmtDias(c.diasAteZero)}</span></td></tr>
     <tr><td>Sai durante o prazo (${r(c.sd)} × ${c.prazo})</td><td class="num">${Math.ceil(c.sd * c.prazo)}</td></tr>
@@ -621,12 +628,13 @@ const COLS_EPI = {
   Prioridade:       ['prioridade'],
 };
 let importEpis = null;
+const chaveEpi = r => norm(r.Codigo) + '|' + norm(r.Title).replace(/\s+/g, ' ');
 function modalImportarEpis(){
   importEpis = null;
   modal(`<h3>Importar materiais</h3>
   <p class="muted small" style="margin-top:-8px">Aceita o CSV/Excel exportado da lista antiga do SharePoint ou qualquer planilha com colunas como
   <code>Título</code>, <code>Código</code>, <code>C.A.</code>, <code>Estoque Atual</code>, <code>Estoque Mínimo</code>, <code>Estoque Máximo</code>, <code>Prazo de Entrega (dias)</code>, <code>Prioridade</code>.
-  Itens com código que já existe são <b>atualizados</b>; os outros são <b>criados</b>.</p>
+  Itens com o mesmo código <b>e</b> o mesmo nome de um já cadastrado são <b>atualizados</b>; os outros são <b>criados</b>.</p>
   <input type="file" id="arqEpi" accept=".xlsx,.xls,.csv,.iqy">
   <div id="prevEpi" style="margin-top:12px"></div>
   <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" id="btnImpEpi" data-a="confirmarImportEpis" disabled>Importar</button></div>`);
@@ -647,14 +655,16 @@ function modalImportarEpis(){
         if(!r.Title) continue;
         if(!r.Codigo){ const ex = S.data.epis.find(e => norm(e.Title) === norm(r.Title)); r.Codigo = ex ? ex.Codigo : 'SEM-' + pad(++semCod, 3); }
         r._consumo = colConsumo ? num(l[colConsumo]) : 0;
-        vistos.set(norm(r.Codigo), r);
+        vistos.set(chaveEpi(r), r);
       }
       const lista = [...vistos.values()];
-      const novos = lista.filter(r => !S.data.epis.some(e => norm(e.Codigo) === norm(r.Codigo))).length;
+      const novos = lista.filter(r => !S.data.epis.some(e => chaveEpi(e) === chaveEpi(r))).length;
+      const porCod = {}; lista.forEach(r => porCod[norm(r.Codigo)] = (porCod[norm(r.Codigo)] || 0) + 1);
+      const compart = Object.values(porCod).filter(n => n > 1).length;
       importEpis = { lista, colConsumo };
       const usadas = Object.entries(mapa).filter(([,c]) => c).map(([k,c]) => `<code>${esc(c)}</code>`).join(' ');
       $('#prevEpi').innerHTML = `<div class="alert">${lista.length} materiais encontrados: <b>${novos} novos</b> e <b>${lista.length - novos} já existentes</b> (serão atualizados).<br>
-        Colunas usadas: ${usadas}${semCod ? `<br><b>${semCod} itens sem código</b> vão receber um código provisório (SEM-001…), que você pode editar depois.` : ''}</div>
+        Colunas usadas: ${usadas}${compart ? `<br>${compart} códigos são usados por mais de um item (variações de tamanho/cor) — cada variação vira um item separado.` : ''}${semCod ? `<br><b>${semCod} itens sem código</b> vão receber um código provisório (SEM-001…), que você pode editar depois.` : ''}</div>
         ${colConsumo ? `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="usarConsumo" checked style="width:auto">
           Usar a coluna <code>${esc(colConsumo)}</code> como saída do último mês (para o cálculo já começar com algum histórico)</label>` : ''}
         <div class="scroll" style="max-height:220px;margin-top:10px"><table><tr><th>Código</th><th>Item</th><th class="num">Atual</th><th class="num">Mín</th><th class="num">Máx</th><th class="num">Prazo</th></tr>
@@ -762,7 +772,7 @@ function telaConsumo(){
   const b = norm(S.filtros.busca);
   let lista = [...S.data.consumo].sort((a,b) => (b.DataFim||'').localeCompare(a.DataFim||'') || String(a.Title).localeCompare(b.Title));
   if(b) lista = lista.filter(c => norm([c.Title, c.Codigo, fmtData(c.DataInicio), fmtData(c.DataFim)].join(' ')).includes(b));
-  const resumo = S.data.epis.map(e => { const regs = S.data.consumo.filter(c => norm(c.Codigo) === norm(e.Codigo));
+  const resumo = S.data.epis.map(e => { const regs = saidasDoItem(e);
       return { e, c: calc(e), n: regs.length, ult: regs.map(r => r.DataFim).sort().pop() }; })
     .filter(r => r.n).sort((a,b) => b.c.sd - a.c.sd);
   return shell('consumo','Saídas (consumo)', `
@@ -1117,7 +1127,7 @@ const A = {
       EstoqueMinimo:num($('#eMin').value), EstoqueMaximo:num($('#eMax').value), PrazoEntregaDias:num($('#ePrazo').value), Prioridade:$('#ePrio').value };
     if(!campos.Title || !campos.Codigo) return toast('Nome e código são obrigatórios.', 'warn');
     const id = Number(el.dataset.id);
-    if(S.data.epis.some(e => norm(e.Codigo) === norm(campos.Codigo) && e.id !== id)) return toast('Já existe um EPI com esse código.', 'warn');
+    if(S.data.epis.some(e => norm(e.Codigo) === norm(campos.Codigo) && norm(e.Title) === norm(campos.Title) && e.id !== id)) return toast('Já existe um EPI com esse código e esse nome.', 'warn');
     if(await salvar(el, async () => { id ? await Store.update('epis', id, campos) : await Store.add('epis', campos); await recarregar('epis'); }, 'EPI salvo!')){ closeModal(); S.manterScroll = true; render(); }
   },
 
@@ -1156,8 +1166,8 @@ const A = {
     if(!e || !de || !ate || q <= 0) return toast('Preencha item, período e quantidade.', 'warn');
     if(ate < de) return toast('A data "Até" precisa ser depois do "De".', 'warn');
     if(await salvar(el, async () => {
-      const ex = S.data.consumo.find(c => norm(c.Codigo) === norm(e.Codigo) && c.DataInicio === de && c.DataFim === ate);
-      const campos = { Title:e.Title, Codigo:e.Codigo, DataInicio:de, DataFim:ate, QtdSaida:q };
+      const ex = S.data.consumo.find(c => Number(c.EpiId) === e.id && c.DataInicio === de && c.DataFim === ate);
+      const campos = { Title:e.Title, Codigo:e.Codigo, EpiId:e.id, DataInicio:de, DataFim:ate, QtdSaida:q };
       ex ? await Store.update('consumo', ex.id, campos) : await Store.add('consumo', campos);
       if(baixa){ await recarregar('epis'); const atual = epiPorId(e.id); await Store.update('epis', e.id, { EstoqueAtual: Math.max(0, num(atual.EstoqueAtual) - q) }); }
       await recarregar('consumo','epis');
@@ -1194,10 +1204,10 @@ const A = {
     if(await salvar(el, async () => {
       for(const r of lista){
         const { _consumo, ...campos } = r;
-        const ex = S.data.epis.find(e => norm(e.Codigo) === norm(campos.Codigo));
-        ex ? await Store.update('epis', ex.id, campos) : await Store.add('epis', { EstoqueAtual:0, EstoqueMinimo:0, EstoqueMaximo:0, PrazoEntregaDias:0, ...campos });
-        if(usarConsumo && _consumo > 0 && !S.data.consumo.some(c => norm(c.Codigo) === norm(campos.Codigo)))
-          await Store.add('consumo', { Title: campos.Title, Codigo: campos.Codigo, DataInicio: ini, DataFim: fim, QtdSaida: _consumo });
+        const ex = S.data.epis.find(e => chaveEpi(e) === chaveEpi(campos));
+        const item = ex ? await Store.update('epis', ex.id, campos) : await Store.add('epis', { EstoqueAtual:0, EstoqueMinimo:0, EstoqueMaximo:0, PrazoEntregaDias:0, ...campos });
+        if(usarConsumo && _consumo > 0 && !S.data.consumo.some(c => Number(c.EpiId) === Number(item.id)))
+          await Store.add('consumo', { Title: campos.Title, Codigo: campos.Codigo, EpiId: Number(item.id), DataInicio: ini, DataFim: fim, QtdSaida: _consumo });
         el.textContent = `Salvando ${++n}/${lista.length}…`;
       }
       await recarregar('epis', 'consumo');
