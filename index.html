@@ -240,11 +240,19 @@ const SupaStore = {
 const Store = DEMO ? DemoStore : SupaStore;
 
 /* ============================== estado ============================== */
-const S = { user:null, data:{ epis:[], usuarios:[], pedidos:[], itens:[], consumo:[], perguntas:[] }, rascunho:[], filtros:{ pedidos:'Abertos', perg:'Pendentes', busca:'' }, erroSetup:null };
+const S = { user:null, data:{ epis:[], usuarios:[], pedidos:[], itens:[], consumo:[], perguntas:[], config:[], contagens:[] }, rascunho:[], contagem:{}, filtros:{ pedidos:'Abertos', perg:'Pendentes', busca:'' }, erroSetup:null };
 
+const OPCIONAIS = ['config', 'contagens'];
+const cfg = chave => S.data.config.find(c => c.Chave === chave)?.Valor || '';
+async function setCfg(chave, valor){
+  const ex = S.data.config.find(c => c.Chave === chave);
+  ex ? await Store.update('config', ex.id, { Valor: valor }) : await Store.add('config', { Chave: chave, Valor: valor });
+}
 async function recarregar(...listas){
   if(!listas.length) listas = Object.keys(S.data);
-  const res = await Promise.all(listas.map(l => Store.all(l)));
+  const res = await Promise.all(listas.map(l => Store.all(l).catch(e => {
+    if(OPCIONAIS.includes(l)){ S.faltaSQL = true; return []; }   // tabelas novas: o app funciona mesmo sem elas
+    throw e; })));
   listas.forEach((l,i) => S.data[l] = res[i]);
 }
 const area = () => S.user?.area;
@@ -320,7 +328,7 @@ function atrasado(p){ return [ST.AP, ST.PR].includes(p.Status) && p.PrevisaoEntr
 /* =============================== telas ============================== */
 const NAV = [
   ['inicio','Início','◧'], ['pedidos','Pedidos','☰'], ['novo','Novo pedido','＋', () => pode.criarPedido()],
-  ['estoque','Estoque','▦'], ['consumo','Saídas','↘'], ['perguntas','Perguntas','?'],
+  ['estoque','Estoque','▦'], ['contagem','Contagem','✓', () => pode.estoque()], ['consumo','Saídas','↘'], ['perguntas','Perguntas','?'],
   ['usuarios','Usuários','☺', () => pode.admin()], ['config','Configurações','⚙', () => pode.admin()],
 ];
 function contadores(){
@@ -444,6 +452,7 @@ function telaPedido(id){
           ${podeEditarCompra ? `<button class="btn sm" data-a="editarCompra" data-id="${p.id}">Editar dados da compra</button>` : ''}
           ${podeCancelar ? `<button class="btn sm bad" data-a="cancelar" data-id="${p.id}">Cancelar pedido</button>` : ''}
           <button class="btn sm" data-a="perguntarPedido" data-ref="${esc(p.Title)}">Fazer uma pergunta</button>
+          ${pode.criarPedido() ? `<button class="btn sm" data-a="reenviarEmail" data-id="${p.id}">✉ Enviar e-mail do pedido</button>` : ''}
         </div>
       </div>
       ${acao || `<div class="card"><h2>Itens</h2>${tabelaItens}</div>`}
@@ -538,7 +547,7 @@ function telaEstoque(){
   <p class="muted small" style="margin:12px 0 0"><b>Até o mín.</b> = em quantos dias o estoque chega no mínimo, no ritmo de saída atual.
   <b>Prazo</b> = média real das últimas entregas (com * quando ainda não há entrega registrada e vale o prazo cadastrado).
   <b>Pedir já</b> = o estoque vai furar o mínimo antes de uma compra nova chegar. Clique num item para ver a conta.</p>
-  </div>`, `${pode.estoque() ? `<button class="btn" data-a="editarEpi" data-id="">＋ Novo EPI</button>` : ''}${S.data.epis.some(e => sugestao(e) > 0) && pode.criarPedido() ? `<button class="btn pri" data-a="pedirSugeridos">Pedir itens sugeridos</button>` : ''}`);
+  </div>`, `${pode.estoque() ? `<button class="btn" data-a="importarEpis">Importar materiais</button><button class="btn" data-a="editarEpi" data-id="">＋ Novo EPI</button>` : ''}${S.data.epis.some(e => sugestao(e) > 0) && pode.criarPedido() ? `<button class="btn pri" data-a="pedirSugeridos">Pedir itens sugeridos</button>` : ''}`);
 }
 
 function blocoCalculo(e){
@@ -570,6 +579,182 @@ function modalEpi(e, leitura){
   <p class="muted small" style="margin:8px 0 0">O prazo cadastrado só é usado até existir a primeira entrega registrada; depois vale a média real.</p>
   <div class="row" style="margin-top:18px;justify-content:flex-end">${leitura ? '<button class="btn" data-a="fechar">Fechar</button>'
     : `<button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" data-a="salvarEpi" data-id="${e.id || ''}">Salvar</button>`}</div>`);
+}
+
+/* ---------- leitura de planilhas ---------- */
+function parseCSV(txt){
+  txt = txt.replace(/^﻿/, '');
+  const l1 = txt.split(/\r?\n/)[0], sep = (l1.match(/;/g)||[]).length > (l1.match(/,/g)||[]).length ? ';' : ',';
+  const rows = []; let row = [], cel = '', q = false;
+  for(let i = 0; i < txt.length; i++){
+    const ch = txt[i];
+    if(q){ if(ch === '"'){ if(txt[i+1] === '"'){ cel += '"'; i++; } else q = false; } else cel += ch; }
+    else if(ch === '"') q = true;
+    else if(ch === sep){ row.push(cel); cel = ''; }
+    else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && txt[i+1] === '\n') i++; row.push(cel); rows.push(row); row = []; cel = ''; }
+    else cel += ch;
+  }
+  if(cel || row.length){ row.push(cel); rows.push(row); }
+  const [cab, ...rs] = rows.filter(r => r.some(c => c.trim()));
+  return (rs || []).map(r => Object.fromEntries(cab.map((c,i) => [c.trim(), (r[i] ?? '').trim()])));
+}
+async function carregarXLSX(){ if(!window.XLSX) await carregarScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }
+async function lerTabela(arq){
+  if(/\.iqy$/i.test(arq.name)) throw new Error('Esse arquivo (.iqy) é só um atalho do SharePoint, sem os dados. Use "Exportar para CSV", ou abra o .iqy no Excel e salve como .xlsx.');
+  if(/\.csv$/i.test(arq.name)) return parseCSV(await arq.text());
+  await carregarXLSX();
+  const wb = XLSX.read(await arq.arrayBuffer(), { cellDates:true });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
+}
+const chaveCol = k => norm(k).replace(/[^a-z0-9]/g,'');
+function acharCol(obj, nomes){ for(const k of Object.keys(obj)) if(nomes.includes(chaveCol(k))) return k; return null; }
+
+/* ---------- Importar materiais (EPIs) ---------- */
+const COLS_EPI = {
+  Title:            ['titulo','title','item','nome','descricao','material','epi','nomedoitem'],
+  Codigo:           ['codigo','cod','codigodoitem','codproduto'],
+  CA:               ['ca','numeroca','certificadodeaprovacao','nca'],
+  EstoqueAtual:     ['estoqueatual','estoque','saldo','saldoatual','quantidade','qtd'],
+  EstoqueMinimo:    ['estoqueminimo','minimo','min','estmin'],
+  EstoqueMaximo:    ['estoquemaximo','maximo','max','estmax'],
+  PrazoEntregaDias: ['prazodeentregadias','prazodeentrega','prazoentrega','prazo','prazodias','prazoentregadias'],
+  Prioridade:       ['prioridade'],
+};
+let importEpis = null;
+function modalImportarEpis(){
+  importEpis = null;
+  modal(`<h3>Importar materiais</h3>
+  <p class="muted small" style="margin-top:-8px">Aceita o CSV/Excel exportado da lista antiga do SharePoint ou qualquer planilha com colunas como
+  <code>Título</code>, <code>Código</code>, <code>C.A.</code>, <code>Estoque Atual</code>, <code>Estoque Mínimo</code>, <code>Estoque Máximo</code>, <code>Prazo de Entrega (dias)</code>, <code>Prioridade</code>.
+  Itens com código que já existe são <b>atualizados</b>; os outros são <b>criados</b>.</p>
+  <input type="file" id="arqEpi" accept=".xlsx,.xls,.csv,.iqy">
+  <div id="prevEpi" style="margin-top:12px"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-a="fechar">Cancelar</button><button class="btn pri" id="btnImpEpi" data-a="confirmarImportEpis" disabled>Importar</button></div>`);
+  $('#arqEpi').addEventListener('change', async ev => {
+    const arq = ev.target.files[0]; if(!arq) return;
+    $('#prevEpi').innerHTML = '<span class="muted">Lendo…</span>'; $('#btnImpEpi').disabled = true;
+    try {
+      const linhas = await lerTabela(arq);
+      if(!linhas.length) throw new Error('A planilha está vazia.');
+      const mapa = Object.fromEntries(Object.entries(COLS_EPI).map(([campo, nomes]) => [campo, acharCol(linhas[0], nomes)]));
+      const colConsumo = acharCol(linhas[0], ['consumomediomensal','consumomensal','consumomedio','mediamensal']);
+      if(!mapa.Title) throw new Error('Não achei a coluna com o nome do item (ex.: "Título" ou "Item").');
+      const vistos = new Map(); let semCod = 0;
+      for(const l of linhas){
+        const r = {};
+        for(const [campo, col] of Object.entries(mapa)) if(col){ const v = l[col];
+          r[campo] = ['EstoqueAtual','EstoqueMinimo','EstoqueMaximo','PrazoEntregaDias'].includes(campo) ? num(v) : String(v ?? '').trim(); }
+        if(!r.Title) continue;
+        if(!r.Codigo){ const ex = S.data.epis.find(e => norm(e.Title) === norm(r.Title)); r.Codigo = ex ? ex.Codigo : 'SEM-' + pad(++semCod, 3); }
+        r._consumo = colConsumo ? num(l[colConsumo]) : 0;
+        vistos.set(norm(r.Codigo), r);
+      }
+      const lista = [...vistos.values()];
+      const novos = lista.filter(r => !S.data.epis.some(e => norm(e.Codigo) === norm(r.Codigo))).length;
+      importEpis = { lista, colConsumo };
+      const usadas = Object.entries(mapa).filter(([,c]) => c).map(([k,c]) => `<code>${esc(c)}</code>`).join(' ');
+      $('#prevEpi').innerHTML = `<div class="alert">${lista.length} materiais encontrados: <b>${novos} novos</b> e <b>${lista.length - novos} já existentes</b> (serão atualizados).<br>
+        Colunas usadas: ${usadas}${semCod ? `<br><b>${semCod} itens sem código</b> vão receber um código provisório (SEM-001…), que você pode editar depois.` : ''}</div>
+        ${colConsumo ? `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="usarConsumo" checked style="width:auto">
+          Usar a coluna <code>${esc(colConsumo)}</code> como saída do último mês (para o cálculo já começar com algum histórico)</label>` : ''}
+        <div class="scroll" style="max-height:220px;margin-top:10px"><table><tr><th>Código</th><th>Item</th><th class="num">Atual</th><th class="num">Mín</th><th class="num">Máx</th><th class="num">Prazo</th></tr>
+        ${lista.slice(0,50).map(r => `<tr><td>${esc(r.Codigo)}</td><td>${esc(r.Title)}</td><td class="num">${r.EstoqueAtual ?? '—'}</td><td class="num">${r.EstoqueMinimo ?? '—'}</td><td class="num">${r.EstoqueMaximo ?? '—'}</td><td class="num">${r.PrazoEntregaDias ?? '—'}</td></tr>`).join('')}</table></div>
+        ${lista.length > 50 ? `<p class="muted small">Mostrando 50 de ${lista.length}.</p>` : ''}`;
+      $('#btnImpEpi').disabled = !lista.length;
+    } catch(e){ $('#prevEpi').innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
+  });
+}
+
+/* ---------- Contagem de estoque ---------- */
+function telaContagem(){
+  if(!pode.estoque()) return shell('contagem','Contagem','<div class="card empty">Apenas SHE pode fazer contagem.</div>');
+  const b = norm(S.filtros.busca);
+  let lista = [...S.data.epis].sort((a,b) => a.Title.localeCompare(b.Title));
+  if(b) lista = lista.filter(e => norm([e.Title, e.Codigo].join(' ')).includes(b));
+  const hist = [...S.data.contagens].sort((a,b) => b.id - a.id).slice(0, 20);
+  return shell('contagem','Contagem de estoque', `
+  ${S.faltaSQL ? '<div class="alert err">Para salvar contagens, rode o arquivo <b>supabase_atualizacao.sql</b> no SQL Editor do Supabase.</div>' : ''}
+  <div class="card">
+    <p class="muted small" style="margin-top:0">Digite o que você contou fisicamente. Itens deixados em branco não são alterados. A diferença aparece na hora; nada muda até você clicar em <b>Salvar contagem</b>.</p>
+    <div style="margin-bottom:12px"><input id="busca" placeholder="Buscar item ou código…" value="${esc(S.filtros.busca)}"></div>
+    <div class="scroll"><table><tr><th>Código</th><th>Item</th><th class="num">No sistema</th><th class="num">Contado</th><th class="num">Diferença</th></tr>
+    ${lista.map(e => `<tr><td>${esc(e.Codigo)}</td><td>${esc(e.Title)}</td><td class="num">${num(e.EstoqueAtual)}</td>
+      <td class="num"><input class="qty" type="number" min="0" inputmode="numeric" data-cont="${e.id}" value="${esc(S.contagem[e.id] ?? '')}"></td>
+      <td class="num" id="dif${e.id}">${difHtml(e)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Nenhum item.</td></tr>'}</table></div>
+    <div class="row" style="margin-top:14px;align-items:center">
+      <div class="fld" style="flex:3"><label>Observação (opcional)</label><input id="ctObs" placeholder="Ex.: contagem mensal do almoxarifado"></div>
+      <span id="ctResumo" class="muted small" style="flex:2">${resumoContagem()}</span>
+      <button class="btn" data-a="limparContagem">Limpar</button>
+      <button class="btn pri" data-a="salvarContagem">Salvar contagem</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Contagens anteriores</h2>
+    ${hist.length ? hist.map(c => { let its = []; try { its = JSON.parse(c.Itens || '[]'); } catch(e){}
+      return `<details style="border-bottom:1px solid var(--line);padding:10px 0"><summary style="cursor:pointer"><b>${fmtDataHora(c.Data)}</b> · ${esc(c.Usuario)} · ${its.length} item(ns) ajustado(s)${c.Observacao ? ' · ' + esc(c.Observacao) : ''}</summary>
+      <table style="margin-top:8px"><tr><th>Item</th><th class="num">Antes</th><th class="num">Contado</th><th class="num">Diferença</th></tr>
+      ${its.map(i => `<tr><td>${esc(i.item)} <span class="muted small">${esc(i.codigo)}</span></td><td class="num">${i.antes}</td><td class="num">${i.depois}</td><td class="num">${fmtDif(i.depois - i.antes)}</td></tr>`).join('')}</table></details>`; }).join('')
+    : '<div class="empty">Nenhuma contagem registrada ainda.</div>'}
+  </div>`);
+}
+const fmtDif = d => d === 0 ? '<span class="muted">0</span>' : `<b style="color:${d < 0 ? 'var(--bad)' : 'var(--ok)'}">${d > 0 ? '+' : ''}${d}</b>`;
+function difHtml(e){ const v = S.contagem[e.id]; return v === undefined || v === '' ? '<span class="muted">—</span>' : fmtDif(num(v) - num(e.EstoqueAtual)); }
+function resumoContagem(){
+  const ids = Object.keys(S.contagem).filter(id => S.contagem[id] !== '');
+  const mud = ids.filter(id => { const e = epiPorId(id); return e && num(S.contagem[id]) !== num(e.EstoqueAtual); });
+  return ids.length ? `${ids.length} contado(s) · ${mud.length} com diferença` : '';
+}
+document.addEventListener('input', ev => {
+  const i = ev.target.closest('[data-cont]'); if(!i) return;
+  S.contagem[i.dataset.cont] = i.value;
+  const e = epiPorId(i.dataset.cont), d = $('#dif' + i.dataset.cont); if(e && d) d.innerHTML = difHtml(e);
+  const r = $('#ctResumo'); if(r) r.textContent = resumoContagem();
+});
+
+/* ---------- E-mail do pedido (Power Automate) ---------- */
+function destinatarios(p){
+  const fixos = cfg('email_destinatarios');
+  const lista = fixos ? fixos.split(/[;,\s]+/) : S.data.usuarios.filter(u => u.Area === 'Compras').map(u => u.Email);
+  if(p?.SolicitanteEmail) lista.push(p.SolicitanteEmail);
+  return [...new Set(lista.map(x => x.trim().toLowerCase()).filter(x => x.includes('@')))];
+}
+async function xlsxBase64(linhas, aba){
+  await carregarXLSX();
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  ws['!cols'] = Object.keys(linhas[0] || {}).map(k => ({ wch: Math.max(k.length, ...linhas.map(l => String(l[k] ?? '').length)) + 2 }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, aba);
+  return XLSX.write(wb, { type:'base64', bookType:'xlsx' });
+}
+async function postarFluxo(dados){
+  const url = cfg('fluxo_email_url');
+  if(!url) throw new Error('A URL do fluxo de e-mail não foi configurada (Configurações).');
+  if(DEMO) throw new Error('No modo demonstração o e-mail não é enviado.');
+  // text/plain + no-cors: o navegador envia sem bloqueio de CORS (o fluxo lê com json(string(triggerBody())))
+  await fetch(url, { method:'POST', mode:'no-cors', headers:{ 'Content-Type':'text/plain;charset=UTF-8' }, body: JSON.stringify(dados) });
+}
+const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
+async function enviarEmailPedido(pid){
+  const p = S.data.pedidos.find(x => x.id === Number(pid)), its = itensDo(pid), dest = destinatarios(p);
+  if(!dest.length) throw new Error('Nenhum destinatário: cadastre alguém de Compras em Usuários ou preencha os destinatários em Configurações.');
+  const linhas = its.map(i => { const e = epiPorId(i.EpiId), c = e ? calc(e) : null;
+    return { 'Item': i.Title, 'Código': i.Codigo, 'C.A.': e?.CA || '', 'Qtd solicitada': num(i.QtdPedida), 'Estoque atual': e ? num(e.EstoqueAtual) : '',
+      'Estoque mínimo': e ? num(e.EstoqueMinimo) : '', 'Saída média/dia': c && c.sd ? Number(c.sd.toFixed(2)) : '',
+      'Dias até o mínimo': c && c.diasAteMin != null ? Math.floor(c.diasAteMin) : '', 'Prazo de entrega (dias)': c ? c.prazo : '' }; });
+  const anexo = await xlsxBase64(linhas, 'Pedido');
+  const link = location.origin + location.pathname + '#/pedido/' + p.id;
+  const td = 'style="border:1px solid #d0d5dd;padding:6px 10px"';
+  const corpo = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1b2333">
+  <p>${saudacao()} a todos.</p><p>Segue a solicitação de compra de EPI realizada pela Área de SHE.</p>
+  <p><b>Número do Pedido:</b> ${esc(p.Title)}<br><b>Data da Solicitação:</b> ${fmtData(p.DataSolicitacao)}<br><b>Solicitante:</b> ${esc(p.Solicitante)}${p.Fornecedor ? `<br><b>Fornecedor sugerido:</b> ${esc(p.Fornecedor)}` : ''}</p>
+  ${p.Observacao ? `<p><b>Observação:</b> ${esc(p.Observacao)}</p>` : ''}
+  <table style="border-collapse:collapse"><tr style="background:#f1f3f7"><th ${td}>Item</th><th ${td}>Código</th><th ${td}>Quantidade</th></tr>
+  ${its.map(i => `<tr><td ${td}>${esc(i.Title)}</td><td ${td}>${esc(i.Codigo)}</td><td ${td} align="right">${num(i.QtdPedida)}</td></tr>`).join('')}</table>
+  <p>Acompanhe e aprove pelo SIGEPI: <a href="${link}">${link}</a></p>
+  <p>Relatório gerado em: ${fmtData(hoje())}</p><p>Atenciosamente,<br>${esc(p.Solicitante)}</p></div>`;
+  await postarFluxo({ para: dest.join(';'), assunto: `Solicitação de Compra de EPI - ${p.Title}`, corpo,
+    anexoNome: `Pedido_${p.Title}_${hoje()}.xlsx`, anexoBase64: anexo });
+  await Store.update('pedidos', p.id, { Historico: comHist(p, `E-mail enviado para ${dest.join(', ')}`) });
+  await recarregar('pedidos');
+  return dest;
 }
 
 /* ---------- Consumo (saídas) ---------- */
@@ -617,16 +802,7 @@ async function lerPlanilha(ev){
   const arq = ev.target.files[0]; if(!arq) return;
   $('#prev').innerHTML = '<span class="muted">Lendo…</span>';
   try {
-    let linhas;
-    if(/\.csv$/i.test(arq.name)){
-      const txt = await arq.text(), l1 = txt.split('\n')[0], sep = (l1.match(/;/g)||[]).length >= (l1.match(/,/g)||[]).length ? ';' : ',';
-      const [cab, ...rs] = txt.split(/\r?\n/).filter(l => l.trim()).map(l => l.split(sep).map(c => c.replace(/^"|"$/g,'').trim()));
-      linhas = rs.map(r => Object.fromEntries(cab.map((c,i) => [c, r[i]])));
-    } else {
-      if(!window.XLSX) await carregarScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
-      const wb = XLSX.read(await arq.arrayBuffer(), { cellDates:true });
-      linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
-    }
+    const linhas = await lerTabela(arq);
     const chave = k => norm(k).replace(/[^a-z]/g,'');
     const achar = (obj, ...nomes) => { for(const k of Object.keys(obj)) if(nomes.includes(chave(k))) return obj[k]; return ''; };
     const de = $('#impDe').value, ate = $('#impAte').value;
@@ -726,11 +902,26 @@ function telaConfig(){
   return shell('config','Configurações', DEMO ? `<div class="card">
     <h2>Modo demonstração</h2>
     <p>Os dados ficam salvos <b>só neste navegador</b>. Para usar com a equipe, preencha <code>supabaseUrl</code> e <code>supabaseAnonKey</code> no início do arquivo <code>index.html</code>.</p>
-    <button class="btn bad" data-a="resetDemo">Restaurar dados de exemplo</button></div>`
+    <button class="btn bad" data-a="resetDemo">Restaurar dados de exemplo</button></div>` + cardEmail()
   : `<div class="card"><h2>Conexão</h2>
     <div class="dl"><div><span>Servidor</span><b>${esc(CONFIG.supabaseUrl)}</b></div><div><span>Conectado como</span><b>${esc(sessao?.user?.email)}</b></div>
     <div><span>Janela do cálculo de saída</span><b>${CONFIG.diasHistorico} dias</b></div></div>
-    <p class="muted small" style="margin-top:14px">Para trocar a senha de alguém ou apagar uma conta: painel do Supabase → Authentication → Users.</p></div>`);
+    <p class="muted small" style="margin-top:14px">Para trocar a senha de alguém ou apagar uma conta: painel do Supabase → Authentication → Users.</p></div>` + cardEmail());
+}
+
+function cardEmail(){
+  const compras = S.data.usuarios.filter(u => u.Area === 'Compras').map(u => u.Email);
+  return `<div class="card" style="margin-top:16px"><h2>E-mail dos pedidos (Power Automate)</h2>
+  ${S.faltaSQL ? '<div class="alert err">Antes, rode o arquivo <b>supabase_atualizacao.sql</b> no SQL Editor do Supabase (cria a tabela de configurações).</div>' : ''}
+  <p class="muted small" style="margin-top:-6px">Quando um pedido é criado, o app manda os dados para o seu fluxo, e o fluxo envia o e-mail com o Excel do pedido pelo Outlook.
+  A URL fica guardada só no banco (não no código público).</p>
+  <div class="fld"><label>URL HTTP do fluxo</label><div class="row" style="flex-wrap:nowrap;align-items:center">
+    <input id="cfgUrl" type="password" value="${esc(cfg('fluxo_email_url'))}" placeholder="https://...powerplatform.com/... ou https://prod-...logic.azure.com/..." autocomplete="off">
+    <button class="btn sm" data-a="toggleUrl" type="button">Mostrar</button></div></div>
+  <div class="fld" style="margin-top:10px"><label>Destinatários (separe por ; ) — deixe vazio para mandar para todos de Compras</label>
+    <textarea id="cfgDest" style="min-height:54px" placeholder="${esc(compras.join('; ') || 'compras@empresa.com; gestor@empresa.com')}">${esc(cfg('email_destinatarios'))}</textarea></div>
+  <p class="muted small">Quem criou o pedido sempre recebe uma cópia. ${cfg('email_destinatarios') ? '' : `Hoje iria para: <b>${esc(compras.join(', ') || 'ninguém (cadastre alguém de Compras)')}</b>.`}</p>
+  <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn" data-a="testarEmail">Enviar e-mail de teste para mim</button><button class="btn pri" data-a="salvarEmailCfg">Salvar</button></div></div>`;
 }
 
 /* ============================== login =============================== */
@@ -783,7 +974,7 @@ function render(){
   const [base, arg] = rota.split('/');
   if(S.rotaAnterior !== base){ S.filtros.busca = ''; S.rotaAnterior = base; }
   const telas = { inicio:telaInicio, pedidos:() => telaPedidos(q), pedido:() => telaPedido(arg), novo:telaNovo, estoque:telaEstoque,
-    consumo:telaConsumo, perguntas:telaPerguntas, usuarios:telaUsuarios, config:telaConfig };
+    consumo:telaConsumo, contagem:telaContagem, perguntas:telaPerguntas, usuarios:telaUsuarios, config:telaConfig };
   const y = window.scrollY;
   $('#app').innerHTML = (telas[base] || telaInicio)();
   if(S.manterScroll) window.scrollTo(0, y); S.manterScroll = false;
@@ -832,7 +1023,14 @@ const A = {
       criado = { id:p.id, numero };
       await recarregar('pedidos','itens');
     });
-    if(ok){ S.rascunho = []; toast(`Pedido ${criado.numero} enviado para Compras!`); location.hash = '#/pedido/' + criado.id; }
+    if(ok){
+      S.rascunho = []; toast(`Pedido ${criado.numero} criado!`);
+      if(cfg('fluxo_email_url') && !DEMO){
+        try { const d = await enviarEmailPedido(criado.id); toast(`E-mail enviado para ${d.length} pessoa(s).`); }
+        catch(e){ toast('Pedido salvo, mas o e-mail não foi enviado: ' + e.message, 'warn', 9000); }
+      }
+      location.hash = '#/pedido/' + criado.id;
+    }
   },
 
   /* --- aprovação (Compras) --- */
@@ -967,6 +1165,62 @@ const A = {
   },
   async rmConsumo(el){ if(!await confirmar('Excluir este lançamento de saída?', 'Excluir', true)) return;
     if(await salvar(el, async () => { await Store.remove('consumo', Number(el.dataset.id)); await recarregar('consumo'); }, 'Excluído.')){ S.manterScroll = true; render(); } },
+
+  /* --- e-mail --- */
+  async reenviarEmail(el){
+    const p = S.data.pedidos.find(x => x.id === Number(el.dataset.id)), dest = destinatarios(p);
+    if(!await confirmar(`Enviar o e-mail do ${p.Title} para: ${dest.join(', ') || '(ninguém)'}?`, 'Enviar')) return;
+    let d; if(await salvar(el, async () => { d = await enviarEmailPedido(p.id); })){ toast(`E-mail enviado para ${d.length} pessoa(s).`); render(); }
+  },
+  async salvarEmailCfg(el){
+    const url = $('#cfgUrl').value.trim(), dest = $('#cfgDest').value.trim();
+    if(url && !/^https:\/\//.test(url)) return toast('A URL precisa começar com https://', 'warn');
+    if(await salvar(el, async () => { await setCfg('fluxo_email_url', url); await setCfg('email_destinatarios', dest); await recarregar('config'); }, 'Configuração salva!')) render();
+  },
+  async testarEmail(el){
+    if(await salvar(el, async () => {
+      await postarFluxo({ para: S.user.email, assunto: 'Teste do SIGEPI', corpo: `<p>Se você recebeu este e-mail, o fluxo do SIGEPI está funcionando. ✔</p><p>Enviado em ${new Date().toLocaleString('pt-BR')}.</p>`,
+        anexoNome: 'teste.xlsx', anexoBase64: await xlsxBase64([{ Teste: 'OK', Data: new Date().toLocaleString('pt-BR') }], 'Teste') });
+    })) toast(`Teste enviado para ${S.user.email}. Confira sua caixa de entrada em 1 ou 2 minutos.`, 'ok', 9000);
+  },
+  toggleUrl(){ const i = $('#cfgUrl'); i.type = i.type === 'password' ? 'text' : 'password'; },
+
+  /* --- importar materiais --- */
+  importarEpis(){ modalImportarEpis(); },
+  async confirmarImportEpis(el){
+    const { lista } = importEpis, usarConsumo = $('#usarConsumo')?.checked;
+    const ini = mesesAtras(1) + '-01', fim = new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0,10);
+    let n = 0;
+    if(await salvar(el, async () => {
+      for(const r of lista){
+        const { _consumo, ...campos } = r;
+        const ex = S.data.epis.find(e => norm(e.Codigo) === norm(campos.Codigo));
+        ex ? await Store.update('epis', ex.id, campos) : await Store.add('epis', { EstoqueAtual:0, EstoqueMinimo:0, EstoqueMaximo:0, PrazoEntregaDias:0, ...campos });
+        if(usarConsumo && _consumo > 0 && !S.data.consumo.some(c => norm(c.Codigo) === norm(campos.Codigo)))
+          await Store.add('consumo', { Title: campos.Title, Codigo: campos.Codigo, DataInicio: ini, DataFim: fim, QtdSaida: _consumo });
+        el.textContent = `Salvando ${++n}/${lista.length}…`;
+      }
+      await recarregar('epis', 'consumo');
+    }, `${lista.length} materiais importados!`)){ closeModal(); render(); }
+  },
+
+  /* --- contagem --- */
+  limparContagem(){ S.contagem = {}; render(); },
+  async salvarContagem(el){
+    const mud = Object.entries(S.contagem).filter(([,v]) => v !== '').map(([id, v]) => [epiPorId(id), num(v)])
+      .filter(([e, v]) => e && v !== num(e.EstoqueAtual));
+    if(!mud.length) return toast('Nenhuma diferença para salvar. Preencha o que foi contado.', 'warn');
+    if(mud.some(([, v]) => v < 0)) return toast('Quantidade contada não pode ser negativa.', 'warn');
+    if(!await confirmar(`Atualizar o estoque de ${mud.length} item(ns) com os valores contados?`, 'Salvar contagem')) return;
+    const obs = $('#ctObs')?.value.trim() || '';
+    const itens = mud.map(([e, v]) => ({ id:e.id, codigo:e.Codigo, item:e.Title, antes:num(e.EstoqueAtual), depois:v }));
+    if(await salvar(el, async () => {
+      for(const i of itens) await Store.update('epis', i.id, { EstoqueAtual: i.depois });
+      try { await Store.add('contagens', { Title: 'Contagem ' + fmtData(hoje()), Data: agora(), Usuario: S.user.nome, Observacao: obs, Itens: JSON.stringify(itens) }); }
+      catch(e){ toast('Estoque atualizado, mas o histórico da contagem não foi salvo (rode o supabase_atualizacao.sql).', 'warn', 9000); }
+      await recarregar('epis', 'contagens');
+    }, `Contagem salva: ${itens.length} item(ns) ajustado(s).`)){ S.contagem = {}; render(); }
+  },
 
   /* --- perguntas --- */
   novaPergunta(){ modalPergunta(); },
